@@ -25,7 +25,16 @@ SECRET_KEY = 'django-insecure-xs7=ou6q2#0x^j(*)hxt6c=_g+nr4b6_tno5_mgm#jx69wju!&
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+CORS_ALLOW_ALL_ORIGINS = True
 
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 ALLOWED_HOSTS = []
 
 REST_FRAMEWORK = {
@@ -81,7 +90,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'act.wsgi.application'
+
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
@@ -122,6 +131,7 @@ DATABASES = {
     }
 }
 
+AUTH_USER_MODEL = 'attendanceapp.CustomUser'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
