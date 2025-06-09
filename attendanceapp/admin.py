@@ -6,9 +6,22 @@ from attendanceapp.models import *
 class EmployeesAdmim(admin.ModelAdmin):
     list_display = ("user","full_name",)
 
+class CustomUserAdmim(admin.ModelAdmin):
+    list_display = ("last_name","first_name","email")
+
 
 class DepartmentAdmim(admin.ModelAdmin):
     list_display = ("department_name","is_active","created_date")
+
+class LEAVETYPEAdmim(admin.ModelAdmin):
+    list_display = ("leave_type","is_active")
+
+class DesignationAdmim(admin.ModelAdmin):
+    list_display = ("designation_name","is_active","created_date")
+
+
+class EmployeeLeaveDetailsAdmim(admin.ModelAdmin):
+    list_display = ("employee_id","employee_leave_type","leave_count")
 
 
 class AttendanceRecordsAdmim(admin.ModelAdmin):
@@ -30,8 +43,12 @@ class DeviceSettingAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Employees, EmployeesAdmim)
+admin.site.register(CustomUser, CustomUserAdmim)
 admin.site.register(Department, DepartmentAdmim)
+admin.site.register(LEAVETYPE, LEAVETYPEAdmim)
+admin.site.register(Designation, DesignationAdmim)
 admin.site.register(AttendanceRecords, AttendanceRecordsAdmim)
 admin.site.register(PayrollRecords, PayrollRecordsAdmin)
 admin.site.register(LeaveMangement, LeaveMangementAdmin)
 admin.site.register(DeviceSetting, DeviceSettingAdmin)
+admin.site.register(EmployeeLeaveDetails, EmployeeLeaveDetailsAdmim)

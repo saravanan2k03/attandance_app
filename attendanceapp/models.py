@@ -27,10 +27,13 @@ LEAVE_STATUS = (
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
     user_type = models.CharField(max_length=20, default='employee')
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+
     
 
     def __str__(self):
-        return self.email
+        return self.username
     
 class Department(models.Model):
     department_name=models.CharField(max_length=255,null=False,blank=False)
@@ -46,13 +49,31 @@ class Department(models.Model):
         self.department_name = self.department_name.upper()
         super(Department, self).save(*args, **kwargs)
     def __str__(self):
-        return f"{self.department_name}: {self.is_active} "
+        return f"{self.department_name} "
     
+
+class Designation(models.Model):
+    designation_name = models.CharField(max_length=255,null=False,blank=False)
+    is_active = models.BooleanField(default=True)
+    created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
+    class Meta:
+        db_table = "Designation"
+        constraints = [
+            models.UniqueConstraint(fields=["designation_name"], name="unique designation")
+        ]
+    def save(self, *args, **kwargs):
+        # Convert the index_code value to uppercase before saving
+        self.designation_name = self.designation_name.upper()
+        super(Designation, self).save(*args, **kwargs)
+    def __str__(self):
+        return f"{self.designation_name}"
+
+        
 class Employees(models.Model):
     user = models.OneToOneField(CustomUser,on_delete=models.CASCADE,null=False,blank=False,related_name="user_details")
     full_name = models.CharField(max_length=255,null=True,blank=True)
     department = models.ForeignKey(Department, null=False, blank=False, on_delete=models.CASCADE, related_name="department_id",)
-    designation = models.CharField(max_length=255,null=False,blank=False)
+    designation = models.ForeignKey(Designation, null=False, blank=False, on_delete=models.CASCADE, related_name="desination_id",)
     date_of_birth = models.DateTimeField(null=False,blank=False)
     gender = models.CharField(max_length=8,choices=GENDER_CHOICE,null=True,blank=True)
     nationality = models.CharField(max_length=255,null=True,blank=True)
@@ -62,15 +83,46 @@ class Employees(models.Model):
     work_status = models.BooleanField(default=True)	
     basic_salary = models.FloatField(default=0)
     gosi_applicable = models.BooleanField(default=True)
+    filename = models.CharField(max_length=255)
+    file = models.FileField(upload_to='uploads/', blank=True, null=True)
+    upload_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
+    employee_leave_details = models.ForeignKey("EmployeeLeaveDetails", null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leavedetailsdata")
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
         verbose_name_plural = "EmployeeDetails"
         
     def __str__(self):
-        return self.user.username
- 
+        return self.full_name
+
+class LEAVETYPE(models.Model):
+    leave_type = models.CharField(max_length=255,null=False,blank=False)
+    is_active = models.BooleanField(default=True)
+    class Meta:
+        db_table = "LEAVETYPE"
+        constraints = [
+            models.UniqueConstraint(fields=["leave_type"], name="unique leavetype")
+        ]
+    def save(self, *args, **kwargs):
+        # Convert the index_code value to uppercase before saving
+        self.leave_type = self.leave_type.upper()
+        super(LEAVETYPE, self).save(*args, **kwargs)
+    def __str__(self):
+        return f"{self.leave_type}"
+    
+
+class EmployeeLeaveDetails(models.Model):
+    employee_id = models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leave_details")
+    employee_leave_type = models.ForeignKey(LEAVETYPE,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leavetype")
+    leave_count = models.IntegerField(null=False, blank=False, default=0)
+    class Meta:
+        db_table = "EmployeeLeaveDetails"
+        verbose_name = "Employee LeaveDetail"
+        verbose_name_plural = "Employee LeaveDetails"
+        
+    def __str__(self):
+        return self.employee_id.username
 
 class AttendanceRecords(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_idss")
@@ -86,7 +138,7 @@ class AttendanceRecords(models.Model):
         verbose_name_plural = "AttendanceRecords"
         
     def __str__(self):
-        return self.employee_id.user.email
+        return self.employee_id.user.username
     
 
 class PayrollRecords(models.Model):
@@ -107,7 +159,7 @@ class PayrollRecords(models.Model):
         verbose_name_plural = "payroll Records"
         
     def __str__(self):
-        return self.employee_id.user.email
+        return self.employee_id.user.username
     
 
 class LeaveMangement(models.Model):
@@ -125,7 +177,7 @@ class LeaveMangement(models.Model):
         verbose_name_plural = "Leave Managements"
         
     def __str__(self):
-        return self.employee_id.user.email
+        return self.employee_id.user.username
 
 
 class DeviceSetting(models.Model):
@@ -146,7 +198,7 @@ class DeviceSetting(models.Model):
         self.device_name = self.device_name.upper()
         super(DeviceSetting, self).save(*args, **kwargs)
     def __str__(self):
-        return f"{self.device_name}: {self.is_active}"
+        return f"{self.device_name}"
     
 
 

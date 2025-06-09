@@ -1,4 +1,5 @@
 import copy
+from tokenize import TokenError
 from django.http import HttpResponse
 from django.shortcuts import render
 from rest_framework.views import APIView
@@ -10,74 +11,102 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model, login
-
-
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import make_password
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
 
 
-
-class AuthUserView(APIView):
-    @csrf_exempt
-    def options(self, request, *args, **kwargs):
-        print("Saravanan")
-
-    def post(self, request, *args, **kwargs):
-        try:
-           request.data.get('req_from_native', False)
-
-           return None
-        except Exception as er:
-            print("Err")
+User = get_user_model()
 
 
-class RegisterUserView(APIView):
-    permission_classes = [permissions.AllowAny]
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
 
-    @csrf_exempt
-    def post(self, request, *args, **kwargs):
-        params = copy.deepcopy(request.data)
-        serializer = seri.CustomUserSerializer(data=params)
 
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = seri.RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            tokens = get_tokens_for_user(user)
+            return Response({
+                "user": serializer.data,
+                "tokens": tokens
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            refreshToken = RefreshToken.for_user(user)
 
-            return Response({'statusCode':201,"user":serializer.data,"token":{"access_token":str(refreshToken.access_token),"refresh_token":str(refreshToken)}})
-        else:
-            return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
-        
+class LoginView(APIView):
+    def post(self, request):
+        serializer = seri.LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data
+            tokens = get_tokens_for_user(user)
+            return Response({
+                "user": {
+                    "username": user.username,
+                    "email": user.email
+                },
+                "tokens": tokens
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class LoginUserView(APIView):
 
-    @csrf_exempt
-    def post(self, request, *args, **kwargs):
-
-        username = request.data.get('username')
-        password = request.data.get('password')
-
-        if username or password:
-            UserModel = get_user_model()
+class ForgotPasswordView(APIView):
+    def post(self, request):
+        serializer = seri.ForgotPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
             try:
-                user = UserModel.objects.get(username=username)
-                serializer = seri.CustomUserSerializer(user)
-                refresh = RefreshToken.for_user(user)
-                return Response({'statusCode':201,"user":serializer.data,"token":{"access_token":str(refresh.access_token),"refresh_token":str(refresh)}})
-
-            except UserModel.DoesNotExist as uEr:
-                return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
-
-
-
+                user = User.objects.get(email=email)
+                # Simulate sending reset link
+                reset_link = f"http://example.com/reset-password/{user.id}/"
+                send_mail(
+                    subject='Password Reset Request',
+                    message=f'Click the link to reset your password: {reset_link}',
+                    from_email='noreply@example.com',
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+                return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({"error": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
            
 
-
+class ResetPasswordView(APIView):
+    def post(self, request, user_id):
+        serializer = seri.ResetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                user = User.objects.get(id=user_id)
+                user.password = make_password(serializer.validated_data['new_password'])
+                user.save()
+                return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
+            except User.DoesNotExist:
+                return Response({"error": "Invalid user ID."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         
 
 
+class LogoutView(APIView):
+    def post(self, request):
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"message": "Logged out successfully."}, status=status.HTTP_205_RESET_CONTENT)
+        except KeyError:
+            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        except TokenError:
+            return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
