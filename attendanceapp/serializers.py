@@ -2,6 +2,14 @@ from rest_framework import serializers
 
 from attendanceapp import models
 
+class CustomUserSerializer(serializers.ModelSerializer):
+     
+    
+    class Meta:
+        model = models.CustomUser
+        fields = '__all__'
+        depth = 1
+
 
 
 class EmployeesSerializer(serializers.ModelSerializer):
