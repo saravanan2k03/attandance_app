@@ -49,7 +49,7 @@ class Department(models.Model):
         self.department_name = self.department_name.upper()
         super(Department, self).save(*args, **kwargs)
     def __str__(self):
-        return f"{self.department_name} "
+        return f"{self.department_name}"
     
 
 class Designation(models.Model):
