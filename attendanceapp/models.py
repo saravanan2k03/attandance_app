@@ -87,7 +87,7 @@ class Employees(models.Model):
     file = models.FileField(upload_to='uploads/', blank=True, null=True)
     upload_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
-    employee_leave_details = models.ForeignKey("EmployeeLeaveDetails", null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leavedetailsdata")
+    # employee_leave_details = models.ForeignKey("EmployeeLeaveDetails", null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leavedetailsdata")
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
