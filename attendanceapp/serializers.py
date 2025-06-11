@@ -82,23 +82,19 @@ class PayrollRecordsAdminSerializer(serializers.ModelSerializer):
         fields = '__all__'
         depth = 1
         
-class LeaveMangementAdminSerializer(serializers.ModelSerializer):
-
+class LeaveManagementSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.LeaveMangement
-        fields = '__all__'
-        depth = 1
+        fields = ['leave_type', 'start_date', 'end_date', 'leave_days', 'status', 'remarks']
 
-class LeaveMangementAdminSerializer(serializers.ModelSerializer):
 
+class EmployeeLeaveDetailsSerializer(serializers.ModelSerializer):
+    leave_type = serializers.StringRelatedField(source='employee_leave_type')
     class Meta:
-        model = models.LeaveMangement
-        fields = '__all__'
-        depth = 1
+        model = models.EmployeeLeaveDetails
+        fields = ['employee_leave_type', 'leave_count']
 
-class DeviceSettingAdminSerializer(serializers.ModelSerializer):
-
+class DeviceSettingSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.DeviceSetting
         fields = '__all__'
-        depth = 1

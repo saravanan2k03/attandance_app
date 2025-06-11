@@ -2,7 +2,7 @@ import copy
 from datetime import datetime
 from tokenize import TokenError
 from django.http import HttpResponse, Response
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
 from rest_framework import permissions
 from attendanceapp import serializers as seri 
@@ -17,7 +17,7 @@ from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 
-from attendanceapp.models import LEAVETYPE, CustomUser, Department, Designation, EmployeeLeaveDetails, Employees
+from attendanceapp.models import LEAVETYPE, AttendanceRecords, CustomUser, Department, Designation, DeviceSetting, EmployeeLeaveDetails, Employees, LeaveMangement
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
@@ -63,7 +63,7 @@ class LoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ForgotPasswordView(APIView):
+class ForgotPasswordView(APIView):              
     def post(self, request):
         serializer = seri.ForgotPasswordSerializer(data=request.data)
         if serializer.is_valid():
@@ -114,126 +114,201 @@ class LogoutView(APIView):
             return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class AddEmployeeData(APIView):
-    permission_classes = (IsAuthenticated)
-    
+class AddEmployeeView(APIView):
     def post(self, request):
         try:
-            
-            # Extract and validate data
-            user_data = request.data('user', {})
-            employee_data = request.data('employee', {})
-            
-            # Validate required fields
-            required_user_fields = ['username', 'email', 'password', 'first_name', 'last_name']
-            required_employee_fields = ['full_name', 'department_id', 'designation_id', 
-                                      'date_of_birth', 'joining_date']
-            
-            for field in required_user_fields:
-                if not user_data.get(field):
-                    return Response({
-                        'success': False, 
-                        'message': f'{field.replace("_", " ").title()} is required'
-                    })
-            
-            for field in required_employee_fields:
-                if not employee_data.get(field):
-                    return Response({
-                        'success': False, 
-                        'message': f'{field.replace("_", " ").title()} is required'
-                    })
-            
-            # Check for existing username/email
-            if CustomUser.objects.filter(username=user_data['username']).exists():
-                return Response({
-                    'success': False,
-                    'message': 'Username already exists'
-                })
-            
-            if CustomUser.objects.filter(email=user_data['email']).exists():
-                return Response({
-                    'success': False,
-                    'message': 'Email already exists'
-                })
-            
-            # Create user
-            user = CustomUser.objects.create_user(
-                username=user_data['username'],
-                email=user_data['email'],
-                password=user_data['password'],
-                first_name=user_data['first_name'],
-                last_name=user_data['last_name'],
-                user_type=user_data.get('user_type', 'employee')
+            data = request.data
+
+            # Create User
+            user = CustomUser.objects.create(
+                username=data["username"],
+                email=data["email"],
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                user_type="employee",
+                password=make_password(data["password"]),
             )
-            
-            # Get related objects
-            department = Department.objects.get(
-                id=employee_data['department_id'], 
-                is_active=True
-            )
-            designation = Designation.objects.get(
-                id=employee_data['designation_id'], 
-                is_active=True
-            )
-            for element in employee_data['']:
-                default_leave_type = LEAVETYPE.objects.get(
-                leave_type = element[''],
-                is_active=True
-                )
-                leave_details = EmployeeLeaveDetails.objects.create(
-                    employee_id=user,
-                    employee_leave_type=default_leave_type,
-                    leave_count=element['count']  # Default 21 days annual leave
-                )               
-                            
-            # Create employee
+
+            # Foreign Keys
+            department = Department.objects.get(id=data["department_id"])
+            designation = Designation.objects.get(id=data["designation_id"])
+
+            # Create Employee
             employee = Employees.objects.create(
                 user=user,
-                full_name=employee_data['full_name'],
+                full_name=f"{data['first_name']} {data['last_name']}",
                 department=department,
                 designation=designation,
-                date_of_birth=datetime.strptime(employee_data['date_of_birth'], '%Y-%m-%d'),
-                gender=employee_data.get('gender'),
-                nationality=employee_data.get('nationality'),
-                iqama_number=employee_data.get('iqama_number'),
-                mob_no=employee_data.get('mob_no'),
-                joining_date=datetime.strptime(employee_data['joining_date'], '%Y-%m-%d'),
-                basic_salary=float(employee_data.get('basic_salary', 0)),
-                gosi_applicable=employee_data.get('gosi_applicable', True),
-                filename=employee_data.get('filename', ''),
+                date_of_birth=data["date_of_birth"],
+                gender=data["gender"],
+                nationality=data.get("nationality", ""),
+                iqama_number=data.get("iqama_number", ""),
+                mob_no=data.get("mob_no", ""),
+                joining_date=data["joining_date"],
+                work_status=data.get("work_status", True),
+                basic_salary=data.get("basic_salary", 0.0),
+                gosi_applicable=data.get("gosi_applicable", True),
+                filename=data.get("filename", ""),
+                file=data.get("file", None),
             )
-            
-            return Response({
-                'success': True,
-                'message': f'Employee {employee.full_name} created successfully!',
-                'employee_id': employee.id
-            })
-            
+
+            # Create Leave Details
+            leave_details = data.get("leave_details", [])
+            for leave_entry in leave_details:
+                leave_type_name = leave_entry.get("leave_type")
+                leave_count = leave_entry.get("leave_count", 0)
+
+                leave_type = LEAVETYPE.objects.get(leave_type=leave_type_name.upper())
+
+                EmployeeLeaveDetails.objects.create(
+                    employee_id=user,
+                    employee_leave_type=leave_type,
+                    leave_count=leave_count
+                )
+
+            return Response({"message": "Employee and leave details added successfully"}, status=status.HTTP_201_CREATED)
+
         except Department.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': 'Selected department does not exist'
-            })
+            return Response({"error": "Department not found"}, status=status.HTTP_400_BAD_REQUEST)
         except Designation.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': 'Selected designation does not exist'
-            })
-        except LEAVETYPE.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': 'Selected Leave type does not exist'
-            })
+            return Response({"error": "Designation not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except LEAVETYPE.DoesNotExist as e:
+            return Response({"error": f"Leave type not found: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({
-                'success': False,
-                'message': f'Error creating employee: {str(e)}'
-            })        
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+###########need to Work###################
+class AddAttendanceRecordView(APIView):
+    def post(self, request):
+        try:
+            data = request.data
+            employee_id = data.get("employee_id")
+
+            # Check if employee exists
+            try:
+                employee = Employees.objects.get(id=employee_id)
+            except Employees.DoesNotExist:
+                return Response({"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Create attendance record
+            attendance = AttendanceRecords.objects.create(
+                employee_id=employee,
+                check_in_time=data["check_in_time"],
+                check_out_time=data["check_out_time"],
+                work_hours=data.get("work_hours", 0),
+                overtime_hours=data.get("overtime_hours", 0),
+                status=data.get("status", "Present")
+            )
+
+            return Response({"message": "Attendance record added successfully"}, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
+class EmployeeListView(APIView):
+    def get(self, request):
+        gender = request.GET.get("gender")
+        department = request.GET.get("department")
+        designation = request.GET.get("designation")
+        work_shift = request.GET.get("work_shift")
+
+        employees = Employees.objects.all()
+
+        if gender:
+            employees = employees.filter(gender=gender)
+        if department:
+            employees = employees.filter(department__department_name__iexact=department)
+        if designation:
+            employees = employees.filter(designation__designation_name__iexact=designation)
+        if work_shift:
+            employees = employees.filter(workshift__iexact=work_shift) 
+
+        serializer = seri.EmployeesSerializer(employees, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    
+class EmployeeLeaveDetailsByUserId(APIView):
+    def get(self, request, user_id):
+        try:
+            user = CustomUser.objects.get(id=user_id)
+            leave_details = EmployeeLeaveDetails.objects.filter(employee_id=user)
+
+            if not leave_details.exists():
+                return Response({"message": "No leave records found for this employee."}, status=status.HTTP_404_NOT_FOUND)
+
+            serialized_data = seri.EmployeeLeaveDetailsSerializer(leave_details, many=True)
+            return Response(serialized_data.data, status=status.HTTP_200_OK)
+
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+class EmployeeLeaveManagementFilterView(APIView):
+    def get(self, request, employee_id):
+        leave_type_filter = request.GET.get('category')  # optional query param
+
+        try:
+            employee = Employees.objects.get(id=employee_id)
+            leave_qs = LeaveMangement.objects.filter(employee_id=employee).order_by('start_date')
+
+            if leave_type_filter:
+                leave_qs = leave_qs.filter(leave_type__iexact=leave_type_filter)
+
+            if not leave_qs.exists():
+                return Response({"message": "No leave records found for this employee."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = seri.LeaveManagementSerializer(leave_qs, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Employees.DoesNotExist:
+            return Response({"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+
+class AllEmployeeLeaveManagementFilterView(APIView):
+    def get(self, request, employee_id):
+        leave_type_filter = request.GET.get('category')  # optional query param
+
+        try:
+            leave_qs = LeaveMangement.objects.all().order_by('start_date')
+
+            if leave_type_filter:
+                leave_qs = leave_qs.filter(leave_type__iexact=leave_type_filter)
+
+            if not leave_qs.exists():
+                return Response({"message": "No leave records found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = seri.LeaveManagementSerializer(leave_qs, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except LeaveMangement.DoesNotExist:
+            return Response({"error": "No leave records found."}, status=status.HTTP_404_NOT_FOUND)
+        
 
 
 
+class AddDeviceView(APIView):
+    def post(self, request):
+        serializer = seri.DeviceSettingSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Device added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
-       
+
+class ListDeviceView(APIView):
+    def get(self, request):
+        devices = DeviceSetting.objects.all().order_by('device_name')
+        serializer = seri.DeviceSettingSerializer(devices, many=True)
+        return Response({"devices": serializer.data}, status=status.HTTP_200_OK)
+    
+class UpdateDeviceView(APIView):
+    def patch(self, request, pk):
+        device = get_object_or_404(DeviceSetting, pk=pk)
+        serializer = seri.DeviceSettingSerializer(device, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Device updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

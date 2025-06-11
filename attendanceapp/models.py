@@ -23,6 +23,12 @@ LEAVE_STATUS = (
     ("Approved","Approved"),
     ("Rejected","Rejected"),
 )
+
+WORK_SHIFT_CHOICES = (
+    ("Morning", "Morning"),
+    ("Evening", "Evening"),
+    ("Night", "Night"),
+)
 # Create your models here.
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
@@ -72,6 +78,7 @@ class Designation(models.Model):
 class Employees(models.Model):
     user = models.OneToOneField(CustomUser,on_delete=models.CASCADE,null=False,blank=False,related_name="user_details")
     full_name = models.CharField(max_length=255,null=True,blank=True)
+    finger_print_code = models.CharField(max_length=255,null=True,blank=True)
     department = models.ForeignKey(Department, null=False, blank=False, on_delete=models.CASCADE, related_name="department_id",)
     designation = models.ForeignKey(Designation, null=False, blank=False, on_delete=models.CASCADE, related_name="desination_id",)
     date_of_birth = models.DateTimeField(null=False,blank=False)
@@ -87,11 +94,14 @@ class Employees(models.Model):
     file = models.FileField(upload_to='uploads/', blank=True, null=True)
     upload_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
-    # employee_leave_details = models.ForeignKey("EmployeeLeaveDetails", null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leavedetailsdata")
+    workshift = models.CharField(max_length=20, choices=WORK_SHIFT_CHOICES, null=True, blank=True)
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
         verbose_name_plural = "EmployeeDetails"
+        constraints = [
+            models.UniqueConstraint(fields=["finger_print_code"], name="unique Fingerprint")
+        ]
         
     def __str__(self):
         return self.full_name
