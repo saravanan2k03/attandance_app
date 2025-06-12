@@ -83,9 +83,27 @@ class PayrollRecordsAdminSerializer(serializers.ModelSerializer):
         depth = 1
         
 class LeaveManagementSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    designation = serializers.SerializerMethodField()
+
     class Meta:
         model = models.LeaveMangement
-        fields = ['leave_type', 'start_date', 'end_date', 'leave_days', 'status', 'remarks']
+        fields = [
+            'full_name',
+            'designation',
+            'leave_type',
+            'start_date',
+            'end_date',
+            'leave_days',
+            'status',
+            'remarks',
+        ]
+
+    def get_full_name(self, obj):
+        return obj.employee_id.full_name
+
+    def get_designation(self, obj):
+        return obj.employee_id.designation.designation_name
 
 
 class EmployeeLeaveDetailsSerializer(serializers.ModelSerializer):

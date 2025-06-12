@@ -12,12 +12,7 @@ ATTENDANCE_STATUS = (
     ("Late","Late"),
     ("On Leave","OnLeave"),
 )
-LEAVE_TYPE = (
-    ("Sick","Sick"),
-    ("Casual","Casual"),
-    ("Emergency","Emergency"),
-    ("Other","Other")
-)
+
 LEAVE_STATUS = (
     ("Pending","Pending"),
     ("Approved","Approved"),
@@ -29,6 +24,9 @@ WORK_SHIFT_CHOICES = (
     ("Evening", "Evening"),
     ("Night", "Night"),
 )
+
+
+
 # Create your models here.
 class CustomUser(AbstractUser):
     email = models.EmailField(unique=True)
@@ -40,6 +38,21 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+    
+
+class Organization(models.Model):
+    organization_name=models.CharField(max_length=255,null=True,blank=True)
+    organization_address=models.CharField(max_length=255,null=True,blank=True)
+    organization_details=models.CharField(max_length=255,null=True,blank=True)
+    created_by =models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_created_by")
+    created_date=models.DateTimeField(auto_now=True, null=False, blank=False)
+    class Meta:
+        db_table = "organization"
+        verbose_name = "organization detail"
+        verbose_name_plural = "organizations details"
+        
+    def __str__(self):
+        return self.organization_name
     
 class Department(models.Model):
     department_name=models.CharField(max_length=255,null=False,blank=False)
@@ -95,12 +108,13 @@ class Employees(models.Model):
     upload_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     workshift = models.CharField(max_length=20, choices=WORK_SHIFT_CHOICES, null=True, blank=True)
+    organization = models.ForeignKey(Organization, null=False, blank=False, on_delete=models.CASCADE, related_name="employee_organization",)
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
         verbose_name_plural = "EmployeeDetails"
         constraints = [
-            models.UniqueConstraint(fields=["finger_print_code"], name="unique Fingerprint")
+            models.UniqueConstraint(fields=["finger_print_code"], name="unique_Fingerprint")
         ]
         
     def __str__(self):
@@ -132,7 +146,7 @@ class EmployeeLeaveDetails(models.Model):
         verbose_name_plural = "Employee LeaveDetails"
         
     def __str__(self):
-        return self.employee_id.username
+        return self.employee_leave_type
 
 class AttendanceRecords(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_idss")
@@ -174,7 +188,7 @@ class PayrollRecords(models.Model):
 
 class LeaveMangement(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leave")
-    leave_type = models.CharField(max_length=255,choices=LEAVE_TYPE,null=True,blank=True)
+    leave_type = models.ForeignKey(LEAVETYPE,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_leave_type")
     start_date = models.DateField(null=False,blank=False)
     end_date = models.DateField(null=False,blank=False)
     leave_days = models.IntegerField(null=False, blank=False, default=0)
@@ -210,7 +224,6 @@ class DeviceSetting(models.Model):
     def __str__(self):
         return f"{self.device_name}"
     
-
 
 
     

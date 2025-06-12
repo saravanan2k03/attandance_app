@@ -1,7 +1,8 @@
 import copy
 from datetime import datetime
 from tokenize import TokenError
-from django.http import HttpResponse, Response
+
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from rest_framework.views import APIView
 from rest_framework import permissions
@@ -16,7 +17,6 @@ from django.contrib.auth import get_user_model, login
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
-
 from attendanceapp.models import LEAVETYPE, AttendanceRecords, CustomUser, Department, Designation, DeviceSetting, EmployeeLeaveDetails, Employees, LeaveMangement
 # Create your views here.
 def members(request):
@@ -217,7 +217,7 @@ class EmployeeListView(APIView):
         employees = Employees.objects.all()
 
         if gender:
-            employees = employees.filter(gender=gender)
+            employees = employees.filter(gender__iexact=gender)
         if department:
             employees = employees.filter(department__department_name__iexact=department)
         if designation:
@@ -245,6 +245,8 @@ class EmployeeLeaveDetailsByUserId(APIView):
         except CustomUser.DoesNotExist:
             return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
+
+
 class EmployeeLeaveManagementFilterView(APIView):
     def get(self, request, employee_id):
         leave_type_filter = request.GET.get('category')  # optional query param
@@ -268,22 +270,26 @@ class EmployeeLeaveManagementFilterView(APIView):
 
 class AllEmployeeLeaveManagementFilterView(APIView):
     def get(self, request, employee_id):
-        leave_type_filter = request.GET.get('category')  # optional query param
+        leave_type_filter = request.GET.get('category')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
 
-        try:
-            leave_qs = LeaveMangement.objects.all().order_by('start_date')
+        # Start with filtering by employee
+        leave_qs = LeaveMangement.objects.filter(employee_id=employee_id)
 
-            if leave_type_filter:
-                leave_qs = leave_qs.filter(leave_type__iexact=leave_type_filter)
+        if leave_type_filter:
+            leave_qs = leave_qs.filter(leave_type__iexact=leave_type_filter)
 
-            if not leave_qs.exists():
-                return Response({"message": "No leave records found."}, status=status.HTTP_404_NOT_FOUND)
+        if start_date and end_date:
+            leave_qs = leave_qs.filter(start_date__gte=start_date, end_date__lte=end_date)
 
-            serializer = seri.LeaveManagementSerializer(leave_qs, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        leave_qs = leave_qs.order_by('start_date')
 
-        except LeaveMangement.DoesNotExist:
-            return Response({"error": "No leave records found."}, status=status.HTTP_404_NOT_FOUND)
+        if not leave_qs.exists():
+            return Response({"message": "No leave records found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = seri.LeaveManagementSerializer(leave_qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
         
 
 
