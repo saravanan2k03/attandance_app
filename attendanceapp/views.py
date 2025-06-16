@@ -17,7 +17,7 @@ from django.contrib.auth import get_user_model, login
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
-from attendanceapp.models import LEAVETYPE, AttendanceRecords, CustomUser, Department, Designation, DeviceSetting, EmployeeLeaveDetails, Employees, LeaveMangement
+from attendanceapp.models import LEAVETYPE, AttendanceRecords, Configuration, CustomUser, Department, Designation, DeviceSetting, EmployeeLeaveDetails, Employees, LeaveMangement, License
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
@@ -182,25 +182,93 @@ class AddAttendanceRecordView(APIView):
     def post(self, request):
         try:
             data = request.data
+            license_key = data.get("license_key")
             employee_id = data.get("employee_id")
+            check_in_time = data.get("check_in_time")
+            check_out_time = data.get("check_out_time")
+            work_hours = float(data.get("work_hours", 0))
+            overtime_hours = float(data.get("overtime_hours", 0))
 
-            # Check if employee exists
+            # Get organization from license key
+            try:
+                license = License.objects.get(key=license_key)
+                organization = license.organization
+            except License.DoesNotExist:
+                return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get employee
             try:
                 employee = Employees.objects.get(id=employee_id)
             except Employees.DoesNotExist:
                 return Response({"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Create attendance record
-            attendance = AttendanceRecords.objects.create(
-                employee_id=employee,
-                check_in_time=data["check_in_time"],
-                check_out_time=data["check_out_time"],
-                work_hours=data.get("work_hours", 0),
-                overtime_hours=data.get("overtime_hours", 0),
-                status=data.get("status", "Present")
-            )
+            # Get config for employee's shift
+            config = Configuration.objects.filter(
+                organization_id=organization,
+                workshift=employee.workshift
+            ).first()
+            if not config:
+                return Response({"error": "Shift configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            return Response({"message": "Attendance record added successfully"}, status=status.HTTP_201_CREATED)
+            today = datetime.today().date()
+            check_in = datetime.strptime(check_in_time, "%H:%M:%S").time()
+            check_out = datetime.strptime(check_out_time, "%H:%M:%S").time()
+
+            present_one = "Absent"
+            present_two = "Absent"
+            is_overtime = False
+
+            # ---- Punch In logic ----
+            if config.punch_in_start_time <= check_in <= config.punch_in_end_time:
+                present_one = "Present"
+            elif config.punch_in_start_late_time and config.punch_in_end_late_time:
+                if config.punch_in_start_late_time <= check_in <= config.punch_in_end_late_time:
+                    present_one = "Late"
+                elif check_in > config.punch_in_end_late_time:
+                    present_one = "Absent"
+
+            # ---- Punch Out logic ----
+            if config.punch_out_start_time <= check_out <= config.punch_out_end_time:
+                present_two = "Present"
+            elif check_out < config.punch_out_start_time:
+                present_two = "Early"
+            elif config.over_time_working_end_time:
+                if check_out > config.punch_out_end_time and check_out <= config.over_time_working_end_time:
+                    present_two = "Present"
+                    is_overtime = True
+                elif check_out > config.over_time_working_end_time:
+                    present_two = "Absent"
+
+            # ---- Check if already has today's morning record ----
+            try:
+                attendance = AttendanceRecords.objects.get(
+                    employee_id=employee,
+                    date=today
+                )
+                # Update existing record
+                attendance.check_out_time = check_out
+                attendance.present_two = present_two
+                attendance.work_hours = work_hours
+                attendance.overtime_hours = overtime_hours
+                attendance.is_overtime = is_overtime
+                attendance.save()
+                message = "Attendance record updated successfully"
+            except AttendanceRecords.DoesNotExist:
+                # Create new record
+                AttendanceRecords.objects.create(
+                    employee_id=employee,
+                    organization_id=organization,
+                    check_in_time=check_in,
+                    check_out_time=check_out,
+                    present_one=present_one,
+                    present_two=present_two,
+                    work_hours=work_hours,
+                    overtime_hours=overtime_hours,
+                    is_overtime=is_overtime
+                )
+                message = "Attendance record created successfully"
+
+            return Response({"message": message}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

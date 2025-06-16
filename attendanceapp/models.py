@@ -47,7 +47,6 @@ class Organization(models.Model):
     organization_address=models.CharField(max_length=255,null=True,blank=True)
     organization_details=models.CharField(max_length=255,null=True,blank=True)
     created_by =models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_created_by")
-    organization_licence_key = models.CharField(max_length=255,null=True,blank=True)
     created_date=models.DateTimeField(auto_now=True, null=False, blank=False)
     is_active = models.BooleanField(default=True)
     class Meta:
@@ -254,5 +253,11 @@ class Configuration(models.Model):
         verbose_name_plural = "configuration Managements"
     def __str__(self):
         return f"{self.id}"
-
+    
+class License(models.Model):
+    key = models.CharField(max_length=255, unique=True)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="licenses")
+    
+    def __str__(self):
+        return self.key
     
