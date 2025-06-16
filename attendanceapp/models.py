@@ -10,7 +10,9 @@ ATTENDANCE_STATUS = (
     ("Present","Present"),
     ("Absent","Absent"),
     ("Late","Late"),
+    ("On Early","OnEarly"),
     ("On Leave","OnLeave"),
+
 )
 
 LEAVE_STATUS = (
@@ -45,7 +47,9 @@ class Organization(models.Model):
     organization_address=models.CharField(max_length=255,null=True,blank=True)
     organization_details=models.CharField(max_length=255,null=True,blank=True)
     created_by =models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_created_by")
+    organization_licence_key = models.CharField(max_length=255,null=True,blank=True)
     created_date=models.DateTimeField(auto_now=True, null=False, blank=False)
+    is_active = models.BooleanField(default=True)
     class Meta:
         db_table = "organization"
         verbose_name = "organization detail"
@@ -55,6 +59,7 @@ class Organization(models.Model):
         return self.organization_name
     
 class Department(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_department_id")
     department_name=models.CharField(max_length=255,null=False,blank=False)
     is_active = models.BooleanField(default=True)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
@@ -72,6 +77,7 @@ class Department(models.Model):
     
 
 class Designation(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_designation_id")
     designation_name = models.CharField(max_length=255,null=False,blank=False)
     is_active = models.BooleanField(default=True)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
@@ -121,6 +127,7 @@ class Employees(models.Model):
         return self.full_name
 
 class LEAVETYPE(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_leave_id")
     leave_type = models.CharField(max_length=255,null=False,blank=False)
     is_active = models.BooleanField(default=True)
     class Meta:
@@ -150,12 +157,15 @@ class EmployeeLeaveDetails(models.Model):
 
 class AttendanceRecords(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_idss")
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_attendance_id")
     date = models.DateField(auto_now=True)
     check_in_time= models.TimeField(blank=True,null=False)
+    present_one= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
+    present_two= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
     check_out_time = models.TimeField(blank=True,null=False)
     work_hours = models.FloatField(default=0)
+    is_overtime = models.BooleanField(default=False,blank=False,null=False)
     overtime_hours = models.FloatField(default=0)
-    status = models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
     class Meta:
         db_table = "attendance_records"
         verbose_name = "AttendanceRecord"
@@ -166,6 +176,7 @@ class AttendanceRecords(models.Model):
     
 
 class PayrollRecords(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_payroll_id")
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_ids")
     month = models.CharField(max_length=255,null=True,blank=True)
     basic_salary = models.FloatField(default=0)
@@ -187,6 +198,7 @@ class PayrollRecords(models.Model):
     
 
 class LeaveMangement(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_leavemanagement_id")
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_leave")
     leave_type = models.ForeignKey(LEAVETYPE,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_leave_type")
     start_date = models.DateField(null=False,blank=False)
@@ -205,6 +217,7 @@ class LeaveMangement(models.Model):
 
 
 class DeviceSetting(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_devicesetting_id")
     device_name = models.CharField(max_length=255,null=False,blank=False)
     device_ip = models.CharField(max_length=255,null=False,blank=False)
     device_port = models.CharField(max_length=255,null=False,blank=False)
@@ -225,5 +238,21 @@ class DeviceSetting(models.Model):
         return f"{self.device_name}"
     
 
+class Configuration(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_config_id")
+    workshift = models.CharField(max_length=20, choices=WORK_SHIFT_CHOICES, null=True, blank=True)
+    punch_in_start_time = models.TimeField(null=True,blank=True)
+    punch_in_end_time  = models.TimeField(null=True,blank=True)
+    punch_in_start_late_time = models.TimeField(null=True,blank=True)
+    punch_in_end_late_time = models.TimeField(null=True,blank=True)
+    punch_out_start_time = models.TimeField(null=True,blank=True)
+    punch_out_end_time = models.TimeField(null=True,blank=True)
+    over_time_working_end_time = models.TimeField(null=True,blank=True)
+    class Meta:
+        db_table = "configuration_management"
+        verbose_name = "configuration Management"
+        verbose_name_plural = "configuration Managements"
+    def __str__(self):
+        return f"{self.id}"
 
     
