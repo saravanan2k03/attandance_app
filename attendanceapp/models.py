@@ -114,6 +114,8 @@ class Employees(models.Model):
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
     workshift = models.CharField(max_length=20, choices=WORK_SHIFT_CHOICES, null=True, blank=True)
     organization = models.ForeignKey(Organization, null=False, blank=False, on_delete=models.CASCADE, related_name="employee_organization",)
+    profile_pic = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
+    file = models.FileField(upload_to='documents/', null=True, blank=True)
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
@@ -252,7 +254,7 @@ class Configuration(models.Model):
         verbose_name = "configuration Management"
         verbose_name_plural = "configuration Managements"
     def __str__(self):
-        return f"{self.id}"
+        return f"{self.organization_id.organization_name}"
     
 class License(models.Model):
     key = models.CharField(max_length=255, unique=True)
@@ -261,3 +263,15 @@ class License(models.Model):
     def __str__(self):
         return self.key
     
+class leaveDaysOfThisYearWise(models.Model):
+    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_leaveDays_id")
+    leave_name = models.CharField(max_length=255,null=False,blank=False)
+    leave_date = models.DateTimeField(null=False, blank=False)
+    is_active = models.BooleanField(default=True)
+    added_date = models.DateTimeField(auto_now=True,blank=False,null=False)
+    created_by =models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_created_by_leaveDaysOfThisYearWise")
+    is_active = models.BooleanField(default=True)
+    class Meta:
+        db_table = "leaveDays_Of_This_Year_Wise"
+        verbose_name = "leaveDays Of This Year Wise"
+        verbose_name_plural = "leave Days Of This Year Wise"
