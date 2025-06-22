@@ -24,12 +24,12 @@ class EmployeeLeaveDetailsAdmim(admin.ModelAdmin):
     list_display = ("employee_id","employee_leave_type","leave_count")
 
 
-class AttendanceRecordsAdmim(admin.ModelAdmin):
-    list_display = ("employee_id","date","check_in_time","check_out_time","work_hours","overtime_hours","status")
+class AttendanceRecordsAdmin(admin.ModelAdmin):
+    list_display = ['employee_id', 'date', 'check_in_time', 'check_out_time', 'present_one', 'present_two']  # REMOVE 'status'
 
 
 class PayrollRecordsAdmin(admin.ModelAdmin):
-    list_display = ("employee_id","month","basic_salary","total_days","present_days","absent_days","gosi_deduction","allowance","deduction","net_salary","created_date")
+    list_display = ['employee_id', 'month', 'net_salary', 'deduction']
 
 
 class LeaveMangementAdmin(admin.ModelAdmin):
@@ -47,7 +47,7 @@ admin.site.register(CustomUser, CustomUserAdmim)
 admin.site.register(Department, DepartmentAdmim)
 admin.site.register(LEAVETYPE, LEAVETYPEAdmim)
 admin.site.register(Designation, DesignationAdmim)
-admin.site.register(AttendanceRecords, AttendanceRecordsAdmim)
+admin.site.register(AttendanceRecords, AttendanceRecordsAdmin)
 admin.site.register(PayrollRecords, PayrollRecordsAdmin)
 admin.site.register(LeaveMangement, LeaveMangementAdmin)
 admin.site.register(DeviceSetting, DeviceSettingAdmin)

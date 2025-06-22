@@ -108,6 +108,7 @@ class Employees(models.Model):
     work_status = models.BooleanField(default=True)	
     basic_salary = models.FloatField(default=0)
     gosi_applicable = models.BooleanField(default=True)
+    gosi_deduction_amount = models.FloatField(blank=False,null=False,default=0)
     filename = models.CharField(max_length=255)
     file = models.FileField(upload_to='uploads/', blank=True, null=True)
     upload_date = models.DateTimeField(auto_now=True, null=False, blank=False)
@@ -115,7 +116,7 @@ class Employees(models.Model):
     workshift = models.CharField(max_length=20, choices=WORK_SHIFT_CHOICES, null=True, blank=True)
     organization = models.ForeignKey(Organization, null=False, blank=False, on_delete=models.CASCADE, related_name="employee_organization",)
     profile_pic = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
-    file = models.FileField(upload_to='documents/', null=True, blank=True)
+    over_time_salary = models.FloatField(default=0)
     class Meta:
         db_table = "employee_details"
         verbose_name = "EmployeeDetail"
@@ -179,18 +180,22 @@ class AttendanceRecords(models.Model):
 class PayrollRecords(models.Model):
     organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_payroll_id")
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_ids")
-    month = models.CharField(max_length=255,null=True,blank=True)
+    month = models.DateField(blank=True,null=True)
     basic_salary = models.FloatField(default=0)
     total_days = models.IntegerField(null=False, blank=False, default=0)
     present_days = models.IntegerField(null=False, blank=False, default=0)
     absent_days = models.IntegerField(null=False, blank=False, default=0)
-    gosi_deduction =models.FloatField(null=False, blank=False, default=0)
     allowance = models.FloatField(null=False, blank=False, default=0)
     deduction = models.FloatField(null=False, blank=False, default=0)
     net_salary = models.FloatField(null=False, blank=False, default=0)
     created_date = models.DateTimeField(auto_now=True, null=False, blank=False)
+    total_overtime_hours =models.FloatField(null=False,blank=False,default=0)
+    over_time_salary = models.FloatField(null=False,blank=False,default=0)
+    total_working_hours = models.FloatField(null=False,blank=False,default=0)
+    payroll_generated = models.BooleanField(default=False,blank=False,null=False)
+
     class Meta:
-        db_table = "payroll_records"
+        db_table = "payroll_records"  
         verbose_name = "Payroll Record"
         verbose_name_plural = "payroll Records"
         

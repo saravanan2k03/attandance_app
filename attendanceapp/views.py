@@ -1086,3 +1086,95 @@ class DeleteHolidayView(APIView):
 
         except License.DoesNotExist:
             return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+def get_first_day_and_today():
+    today = date.today()
+    first_day = today.replace(day=1)
+    return first_day, today
+
+
+def calculate_attendance_metrics(employee, start_date, end_date):
+    attendance = AttendanceRecords.objects.filter(
+        employee_id=employee,
+        date__range=(start_date, end_date)
+    )
+    full_day = 0
+    half_day = 0
+    total_hours = 0
+    overtime = 0
+
+    for record in attendance:
+        if record.present_one == "Present" and record.present_two == "Present":
+            full_day += 1
+        elif record.present_one == "Present" or record.present_two == "Present":
+            half_day += 1
+        total_hours += record.work_hours or 0
+        overtime += record.overtime_hours or 0
+
+    return full_day, half_day, total_hours, overtime
+
+
+class GenerateOrUpdatePayrollView(APIView):
+    def post(self, request):
+        license_key = request.data.get("license_key")
+        specific_employee_id = request.data.get("employee_id")  # optional
+
+        try:
+            license = License.objects.get(key=license_key)
+            organization = license.organization
+        except License.DoesNotExist:
+            return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_date, end_date = get_first_day_and_today()
+        total_working_days = (end_date - start_date).days + 1
+
+        employees = Employees.objects.filter(organization=organization)
+        if specific_employee_id:
+            employees = employees.filter(id=specific_employee_id)
+
+        updated_employees = []
+        for employee in employees:
+            full_day, half_day, total_hours, overtime_hours = calculate_attendance_metrics(
+                employee, start_date, end_date
+            )
+
+            days_worked = full_day + (half_day * 0.5)
+            salary_per_day = employee.basic_salary / total_working_days
+            earned_salary = salary_per_day * days_worked
+            overtime_amount = employee.over_time_salary * overtime_hours
+            gosi_deduction = employee.gosi_deduction_amount if employee.gosi_applicable else 0
+            net_salary = earned_salary + overtime_amount - gosi_deduction
+
+            payroll, created = PayrollRecords.objects.update_or_create(
+                organization_id=organization,
+                employee_id=employee,
+                month=start_date,
+                defaults={
+                    "basic_salary": employee.basic_salary,
+                    "total_days": total_working_days,
+                    "present_days": days_worked,
+                    "absent_days": total_working_days - days_worked,
+                    "allowance": 0,
+                    "deduction": gosi_deduction,
+                    "net_salary": round(net_salary, 2),
+                    "total_overtime_hours": overtime_hours,
+                    "over_time_salary": overtime_amount,
+                    "total_working_hours": total_hours,
+                    "payroll_generated": True
+                },
+            )
+
+            updated_employees.append({
+                "employee_id": employee.id,
+                "name": employee.full_name,
+                "net_salary": payroll.net_salary,
+                "payroll_status": "Updated" if not created else "Created"
+            })
+
+        return Response({
+            "status": "success",
+            "organization": organization.organization_name,
+            "payroll": updated_employees
+        }, status=status.HTTP_200_OK)
