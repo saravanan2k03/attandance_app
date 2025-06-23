@@ -4,7 +4,6 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from .views import LogoutView, RegisterView, ForgotPasswordView,LoginView, ResetPasswordView
 from attendanceapp import views
 
 urlpatterns = [
@@ -14,6 +13,7 @@ urlpatterns = [
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/forgot-password/', views.ForgotPasswordView.as_view(), name='forgot_password'),
     path('api/auth/reset-password/<int:user_id>/', views.ResetPasswordView.as_view(), name='reset_password'),
+    path("reset-password/<int:user_id>/", views.ResetPasswordHTMLView.as_view(), name="reset-password-html"),
     # --- Employee Management ---
     path('api/employees/add-or-update/', views.AddOrUpdateEmployeeView.as_view(), name='add_or_update_employee'),
     path('api/employees/list/', views.EmployeeListView.as_view(), name='list_employees'),
@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/employees/leave-details/add-or-update/', views.AddOrUpdateEmployeeLeaveDetailView.as_view(), name='add_update_employee_leave_detail'),
     # --- Attendance & Payroll ---
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),
+    path('api/attendance/update/', views.UpdateAttendanceRecordView.as_view(), name='update-attendance'),
     path('api/payroll/generate/', views.GenerateOrUpdatePayrollView.as_view(), name='generate_payroll'),
     # --- Leave Management ---
     path('api/leaves/request/', views.RequestLeaveAPIView.as_view(), name='request_leave'),
@@ -47,4 +48,5 @@ urlpatterns = [
     path('api/devices/update/<int:pk>/', views.UpdateDeviceView.as_view(), name='update_device'),
     # --- HR Dashboard ---
     path('api/dashboard/hr/', views.HRDashboardView.as_view(), name='hr_dashboard'),
+    path('api/attendance/dashboard/', views.EmployeeDashboardView.as_view(), name='attendance-dashboard'),
 ]

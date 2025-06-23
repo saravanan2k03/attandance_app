@@ -1,5 +1,7 @@
+import calendar
 import copy
 from datetime import date, datetime
+from email.utils import parsedate
 from django.utils.timezone import now
 from tokenize import TokenError
 from django.db.models import *
@@ -22,6 +24,9 @@ from django.core.exceptions import ValidationError
 from attendanceapp.models import *
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils.dateparse import parse_datetime
+from django.template.loader import render_to_string
+from django.core.mail import EmailMessage
+ 
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
@@ -75,14 +80,34 @@ class ForgotPasswordView(APIView):
             try:
                 user = User.objects.get(email=email)
                 # Simulate sending reset link
-                reset_link = f"http://example.com/reset-password/{user.id}/"
-                send_mail(
+
+                context = {
+                "username":user.username,
+                "email":email,
+                "logo_url":f"http://example.com/static/admin/img/calendar-icons.svg",
+                 "reset_link" : f"http://example.com/reset-password/{user.id}/"
+                }
+                html_content = render_to_string("email.html", context)
+
+                email_message = EmailMessage(
                     subject='Password Reset Request',
-                    message=f'Click the link to reset your password: {reset_link}',
+                    body=html_content,
                     from_email='noreply@example.com',
-                    recipient_list=[email],
-                    fail_silently=False,
+                    to=['noreply@example.com'],
+                    # cc=[cc_email]
                 )
+
+                email_message.content_subtype = "html"
+
+                # Send email
+                email_message.send()
+                # send_mail(
+                #     subject='Password Reset Request',
+                #     message=f'Click the link to reset your password: {reset_link}',
+                #     from_email='noreply@example.com',
+                #     recipient_list=[email],
+                #     fail_silently=False,
+                # )
                 return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
                 return Response({"error": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
@@ -103,7 +128,9 @@ class ResetPasswordView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         
-
+class ResetPasswordHTMLView(APIView):
+    def get(self, request, user_id):
+        return render(request, "reset_password.html", {"user_id": user_id})
 
 class LogoutView(APIView):
     def post(self, request):
@@ -116,7 +143,88 @@ class LogoutView(APIView):
             return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
         except TokenError:
             return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+        
 
+class EmployeeDashboardView(APIView):
+    def get(self, request):
+        license_key = request.query_params.get("license_key")
+        employee_id = request.query_params.get("employee_id")
+
+        if not license_key or not employee_id:
+            return Response({"error": "license_key and employee_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 1. Get organization by license
+            license_obj = License.objects.get(key=license_key)
+            organization = license_obj.organization
+
+            # 2. Get employee and ensure belongs to organization
+            employee = Employees.objects.get(id=employee_id, organization=organization)
+
+            # 3. Date range for current month
+            today = now().date()
+            first_day = today.replace(day=1)
+            last_day = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+
+            # 4. Attendance records for this employee this month
+            records = AttendanceRecords.objects.filter(
+                employee_id=employee,
+                organization_id=organization,
+                date__range=(first_day, last_day)
+            )
+
+            attendance_this_month = records.filter(present_one="Present", present_two="Present").count()
+            leaves_taken = records.filter(present_one="Absent", present_two="Absent").count()
+            late_logins = records.filter(Q(present_one="Late") | Q(present_two="Late")).count()
+            absent_in_this_month = records.filter(Q(present_one="Absent") | Q(present_two="Absent")).count()
+            overtime_hours = records.aggregate(total=Sum("overtime_hours"))["total"] or 0
+
+            pending_leave_requests = LeaveMangement.objects.filter(
+                employee_id=employee,
+                organization_id=organization,
+                status="Pending"
+            ).count()
+
+            # Today's punch in/out
+            today_record = records.filter(date=today).first()
+            punch_in = today_record.check_in_time.strftime('%I:%M %p') if today_record and today_record.check_in_time else "00:00"
+            punch_out = today_record.check_out_time.strftime('%I:%M %p') if today_record and today_record.check_out_time else "00:00"
+
+            # Table data
+            table_data = [
+                {
+                    "date": r.date.strftime('%Y-%m-%d'),
+                    "punch_in": r.check_in_time.strftime('%I:%M %p') if r.check_in_time else "00:00",
+                    "punch_out": r.check_out_time.strftime('%I:%M %p') if r.check_out_time else "00:00"
+                }
+                for r in records.order_by("date")
+            ]
+
+            total_days = records.count()
+            pie_chart = {
+                "present": round((attendance_this_month / total_days) * 100, 2) if total_days else 0,
+                "absent": round((absent_in_this_month / total_days) * 100, 2) if total_days else 0,
+                "leave": round((leaves_taken / total_days) * 100, 2) if total_days else 0
+            }
+
+            return Response({
+                "employee_name": employee.full_name,
+                "attendance_this_month": attendance_this_month,
+                "leaves_taken": leaves_taken,
+                "late_logins": late_logins,
+                "absent_in_this_month": absent_in_this_month,
+                "overtime_working": overtime_hours,
+                "pending_leave_requests": pending_leave_requests,
+                "punch_in": punch_in,
+                "punch_out": punch_out,
+                "table_data": table_data,
+                "pie_chart": pie_chart
+            }, status=status.HTTP_200_OK)
+
+        except License.DoesNotExist:
+            return Response({"error": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
+        except Employees.DoesNotExist:
+            return Response({"error": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
 
 class AddOrUpdateEmployeeView(APIView):
     parser_classes = [MultiPartParser, FormParser]
@@ -342,7 +450,45 @@ class AddAttendanceRecordView(APIView):
 
 
 
+class UpdateAttendanceRecordView(APIView):
+    def put(self, request):
+        license_key = request.data.get("license_key")
+        employee_id = request.data.get("employee_id")
+        date_str = request.data.get("date")
 
+        if not all([license_key, employee_id, date_str]):
+            return Response({"error": "license_key, employee_id, and date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        attendance_date = parsedate(date_str)
+        if not attendance_date:
+            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Get organization
+            license_obj = License.objects.get(key=license_key)
+            organization = license_obj.organization
+
+            # Get employee
+            employee = Employees.objects.get(id=employee_id, organization=organization)
+
+            # Get attendance record
+            attendance = AttendanceRecords.objects.get(employee_id=employee, organization_id=organization, date=attendance_date)
+
+            # Optional fields: only update if provided
+            optional_fields = ['check_in_time', 'check_out_time', 'present_one', 'present_two', 'work_hours', 'is_overtime', 'overtime_hours']
+            for field in optional_fields:
+                if field in request.data:
+                    setattr(attendance, field, request.data[field])  # Update only if present
+
+            attendance.save()
+            return Response({"message": "Attendance updated successfully."}, status=status.HTTP_200_OK)
+
+        except License.DoesNotExist:
+            return Response({"error": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
+        except Employees.DoesNotExist:
+            return Response({"error": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
+        except AttendanceRecords.DoesNotExist:
+            return Response({"error": "Attendance record not found for given employee and date."}, status=status.HTTP_404_NOT_FOUND)
 
 class EmployeeListView(APIView):
     def get(self, request):
