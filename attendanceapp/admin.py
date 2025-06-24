@@ -3,7 +3,7 @@ from attendanceapp.models import *
 
 
 class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ("username", "first_name", "last_name", "email", "user_type")
+    list_display = ("id","username", "first_name", "last_name", "email", "user_type")
     search_fields = ("username", "email")
 
 
@@ -26,19 +26,17 @@ class DesignationAdmin(admin.ModelAdmin):
 
 
 class EmployeesAdmin(admin.ModelAdmin):
-    list_display = ("user", "full_name", "department", "designation", "joining_date", "basic_salary", "workshift", "work_status")
+    list_display = ("id","user", "full_name", "department", "designation", "joining_date", "basic_salary", "workshift", "work_status")
     search_fields = ("full_name", "finger_print_code")
     list_filter = ("department", "designation", "workshift")
 
 
-class LEAVETYPEAdmin(admin.ModelAdmin):
-    list_display = ("leave_type", "organization_id", "is_active")
-    search_fields = ("leave_type",)
-    list_filter = ("organization_id",)
+class LeaveTypeAdmin(admin.ModelAdmin):
+    list_display = ("id","leave_type", "organization_id", "is_active")
 
 
 class EmployeeLeaveDetailsAdmin(admin.ModelAdmin):
-    list_display = ("employee_id", "employee_leave_type", "leave_count")
+    list_display = ("id","employee_id", "employee_leave_type", "leave_count")
     search_fields = ("employee_id__username",)
 
 
@@ -86,7 +84,7 @@ admin.site.register(Organization, OrganizationAdmin)
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Designation, DesignationAdmin)
 admin.site.register(Employees, EmployeesAdmin)
-admin.site.register(LEAVETYPE, LEAVETYPEAdmin)
+admin.site.register(LEAVETYPE, LeaveTypeAdmin)
 admin.site.register(EmployeeLeaveDetails, EmployeeLeaveDetailsAdmin)
 admin.site.register(AttendanceRecords, AttendanceRecordsAdmin)
 admin.site.register(PayrollRecords, PayrollRecordsAdmin)

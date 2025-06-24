@@ -17,7 +17,7 @@ urlpatterns = [
     # --- Employee Management ---
     path('api/employees/add-or-update/', views.AddOrUpdateEmployeeView.as_view(), name='add_or_update_employee'),
     path('api/employees/list/', views.EmployeeListView.as_view(), name='list_employees'),
-    path('api/employees/<int:user_id>/leave-details/', views.EmployeeLeaveDetailsByUserId.as_view(), name='employee_leave_details'),
+    path('api/employees/leave-details/<int:user_id>/', views.EmployeeLeaveDetailsByUserId.as_view(), name='employee_leave_details'),
     path('api/employees/leave-details/add-or-update/', views.AddOrUpdateEmployeeLeaveDetailView.as_view(), name='add_update_employee_leave_detail'),
     # --- Attendance & Payroll ---
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),
@@ -41,10 +41,18 @@ urlpatterns = [
     path('api/designations/add/', views.AddDesignationView.as_view(), name='add_designation'),
     path('api/designations/update/<int:designation_id>/', views.UpdateDesignationView.as_view(), name='update_designation'),
 
+    path('api/departments/', views.ListDepartmentsByLicenseView.as_view(), name='list_departments_by_license'),
+    path('api/designations/', views.ListDesignationsByLicenseView.as_view(), name='list_designations_by_license'),
+
     path('api/config/add-or-update/', views.AddOrUpdateConfigurationView.as_view(), name='add_or_update_config'),
+    path('api/configurations/', views.ListConfigurationByLicenseKeyView.as_view(), name='list-configurations-by-license'),
+
+
+    path('api/leave-type/', views.AddOrUpdateLeaveTypeView.as_view(), name='add_or_update_leave_type'),
+    path('api/leave-type/list/', views.ListLeaveTypesByLicenseView.as_view(), name='list-leave-types'),
     # --- Device Management ---
     path('api/devices/add/', views.AddDeviceView.as_view(), name='add_device'),
-    path('api/devices/list/', views.ListDeviceView.as_view(), name='list_devices'),
+    path('api/devices/list/', views.ListDeviceByLicenseView.as_view(), name='list_devices'),
     path('api/devices/update/<int:pk>/', views.UpdateDeviceView.as_view(), name='update_device'),
     # --- HR Dashboard ---
     path('api/dashboard/hr/', views.HRDashboardView.as_view(), name='hr_dashboard'),

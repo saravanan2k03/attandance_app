@@ -99,12 +99,12 @@ class Employees(models.Model):
     finger_print_code = models.CharField(max_length=255,null=True,blank=True)
     department = models.ForeignKey(Department, null=False, blank=False, on_delete=models.CASCADE, related_name="department_id",)
     designation = models.ForeignKey(Designation, null=False, blank=False, on_delete=models.CASCADE, related_name="desination_id",)
-    date_of_birth = models.DateTimeField(null=False,blank=False)
+    date_of_birth = models.DateField(null=False,blank=False)
     gender = models.CharField(max_length=8,choices=GENDER_CHOICE,null=True,blank=True)
     nationality = models.CharField(max_length=255,null=True,blank=True)
     iqama_number = models.CharField(max_length=255,null=True,blank=True)
     mob_no = models.CharField(max_length=16,null=True,blank=True)
-    joining_date = models.DateTimeField(null=False,blank=False)
+    joining_date = models.DateField(null=False,blank=False)
     work_status = models.BooleanField(default=True)	
     basic_salary = models.FloatField(default=0)
     gosi_applicable = models.BooleanField(default=True)
@@ -142,7 +142,7 @@ class LEAVETYPE(models.Model):
         self.leave_type = self.leave_type.upper()
         super(LEAVETYPE, self).save(*args, **kwargs)
     def __str__(self):
-        return f"{self.leave_type}"
+        return str(self.leave_type)
     
 
 class EmployeeLeaveDetails(models.Model):
@@ -153,18 +153,21 @@ class EmployeeLeaveDetails(models.Model):
         db_table = "EmployeeLeaveDetails"
         verbose_name = "Employee LeaveDetail"
         verbose_name_plural = "Employee LeaveDetails"
+        constraints = [
+            models.UniqueConstraint(fields=["employee_id", "employee_leave_type"], name="unique_employee_leave_type")
+        ]
         
     def __str__(self):
-        return self.employee_leave_type
+        return f"{self.employee_id} - {self.employee_leave_type}"
 
 class AttendanceRecords(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_idss")
     organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_attendance_id")
-    date = models.DateField(auto_now=True)
-    check_in_time= models.TimeField(blank=True,null=False)
+    date = models.DateTimeField(auto_now=True)
+    check_in_time= models.TimeField(blank=True,null=True)
     present_one= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
     present_two= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
-    check_out_time = models.TimeField(blank=True,null=False)
+    check_out_time = models.TimeField(blank=True,null=True)
     work_hours = models.FloatField(default=0)
     is_overtime = models.BooleanField(default=False,blank=False,null=False)
     overtime_hours = models.FloatField(default=0)
@@ -269,14 +272,29 @@ class License(models.Model):
         return self.key
     
 class leaveDaysOfThisYearWise(models.Model):
-    organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_leaveDays_id")
-    leave_name = models.CharField(max_length=255,null=False,blank=False)
-    leave_date = models.DateTimeField(null=False, blank=False)
-    is_active = models.BooleanField(default=True)
-    added_date = models.DateTimeField(auto_now=True,blank=False,null=False)
-    created_by =models.ForeignKey(CustomUser,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_id_created_by_leaveDaysOfThisYearWise")
-    is_active = models.BooleanField(default=True)
+    organization_id = models.ForeignKey(
+        Organization,
+        null=False,
+        blank=False,
+        on_delete=models.CASCADE,
+        related_name="organization_leaveDays_id"
+    )
+    leave_name = models.CharField(max_length=255, null=False, blank=False)
+    leave_date = models.DateField(null=False, blank=False)
+    is_active = models.BooleanField(default=True)  # ✅ Only once
+    added_date = models.DateTimeField(auto_now=True, blank=False, null=False)
+    created_by = models.ForeignKey(
+        CustomUser,
+        null=False,
+        blank=False,
+        on_delete=models.CASCADE,
+        related_name="employee_id_created_by_leaveDaysOfThisYearWise"
+    )
+
     class Meta:
         db_table = "leaveDays_Of_This_Year_Wise"
         verbose_name = "leaveDays Of This Year Wise"
         verbose_name_plural = "leave Days Of This Year Wise"
+
+    def __str__(self):
+        return f"{self.leave_name} - {self.leave_date}"

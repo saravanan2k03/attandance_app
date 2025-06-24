@@ -108,9 +108,10 @@ class LeaveManagementSerializer(serializers.ModelSerializer):
 
 class EmployeeLeaveDetailsSerializer(serializers.ModelSerializer):
     leave_type = serializers.StringRelatedField(source='employee_leave_type')
+
     class Meta:
         model = models.EmployeeLeaveDetails
-        fields = ['employee_leave_type', 'leave_count']
+        fields = ['employee_leave_type', 'leave_count', 'leave_type']
 
 class DeviceSettingSerializer(serializers.ModelSerializer):
     class Meta:
