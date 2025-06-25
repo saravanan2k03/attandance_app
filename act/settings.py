@@ -36,7 +36,7 @@ CORS_ALLOW_METHODS = [
     'POST',
     'PUT',
 ]
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -177,3 +177,14 @@ STATIC_ROOT = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+#------email SMTP settings
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_USE_TLS = True
+EMAIL_PORT = 587
+EMAIL_HOST_USER = "saravanan2kk0@gmail.com"
+EMAIL_HOST_PASSWORD = "yinmxdqukezkkkxb"

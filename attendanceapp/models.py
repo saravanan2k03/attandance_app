@@ -163,7 +163,7 @@ class EmployeeLeaveDetails(models.Model):
 class AttendanceRecords(models.Model):
     employee_id = models.ForeignKey(Employees,null=False, blank=False, on_delete=models.CASCADE, related_name="employee_idss")
     organization_id =  models.ForeignKey(Organization,null=False, blank=False, on_delete=models.CASCADE, related_name="organization_attendance_id")
-    date = models.DateTimeField(auto_now=True)
+    date = models.DateField()
     check_in_time= models.TimeField(blank=True,null=True)
     present_one= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)
     present_two= models.CharField(max_length=255,choices=ATTENDANCE_STATUS,null=True,blank=True)

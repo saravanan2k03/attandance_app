@@ -27,7 +27,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils.dateparse import parse_datetime
 from django.template.loader import render_to_string
 from django.core.mail import EmailMessage
-from django.utils.dateparse import parse_date 
+from django.utils.dateparse import parse_date
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
@@ -54,7 +54,7 @@ class RegisterView(APIView):
                 "user": serializer.data,
                 "tokens": tokens
             }, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LoginView(APIView):
@@ -65,12 +65,14 @@ class LoginView(APIView):
             tokens = get_tokens_for_user(user)
             return Response({
                 "user": {
+                    "id":user.id,
                     "username": user.username,
-                    "email": user.email
+                    "email": user.email,
+                    "user_type":user.user_type
                 },
                 "tokens": tokens
             }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ForgotPasswordView(APIView):              
@@ -85,16 +87,16 @@ class ForgotPasswordView(APIView):
                 context = {
                 "username":user.username,
                 "email":email,
-                "logo_url":f"http://example.com/static/admin/img/calendar-icons.svg",
-                 "reset_link" : f"http://example.com/reset-password/{user.id}/"
+                "logo_url":f"http://127.0.0.1:8000/static/admin/img/calendar-icons.svg",
+                 "reset_link" : f"http://127.0.0.1:8000/reset-password/{user.id}/"
                 }
                 html_content = render_to_string("email.html", context)
 
                 email_message = EmailMessage(
                     subject='Password Reset Request',
                     body=html_content,
-                    from_email='noreply@example.com',
-                    to=['noreply@example.com'],
+                    from_email="saravanan2kk0@gmail.com",
+                    to=['midhunrajagopal112@gmail.com'],
                     # cc=[cc_email]
                 )
 
@@ -102,17 +104,10 @@ class ForgotPasswordView(APIView):
 
                 # Send email
                 email_message.send()
-                # send_mail(
-                #     subject='Password Reset Request',
-                #     message=f'Click the link to reset your password: {reset_link}',
-                #     from_email='noreply@example.com',
-                #     recipient_list=[email],
-                #     fail_silently=False,
-                # )
                 return Response({"message": "Password reset link sent."}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
-                return Response({"error": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "User not found with this email."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
            
 
 class ResetPasswordView(APIView):
@@ -125,8 +120,8 @@ class ResetPasswordView(APIView):
                 user.save()
                 return Response({"message": "Password reset successfully."}, status=status.HTTP_200_OK)
             except User.DoesNotExist:
-                return Response({"error": "Invalid user ID."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid user ID."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
         
 class ResetPasswordHTMLView(APIView):
@@ -139,11 +134,11 @@ class LogoutView(APIView):
             refresh_token = request.data["refresh"]
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response({"message": "Logged out successfully."}, status=status.HTTP_205_RESET_CONTENT)
+            return Response({"message": "Logged out successfully.","status":True}, status=status.HTTP_205_RESET_CONTENT)
         except KeyError:
-            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
-        except TokenError:
-            return Response({"error": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Refresh token is required.","status":False}, status=status.HTTP_400_BAD_REQUEST)
+        except (TokenError,Exception):
+            return Response({"message": "Invalid or expired token.","status":False}, status=status.HTTP_400_BAD_REQUEST)
         
 
 class EmployeeDashboardView(APIView):
@@ -152,7 +147,7 @@ class EmployeeDashboardView(APIView):
         employee_id = request.query_params.get("employee_id")
 
         if not license_key or not employee_id:
-            return Response({"error": "license_key and employee_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key and employee_id are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # 1. Get organization by license
@@ -223,9 +218,9 @@ class EmployeeDashboardView(APIView):
             }, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
         except Employees.DoesNotExist:
-            return Response({"error": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -241,13 +236,13 @@ class AddOrUpdateEmployeeView(APIView):
             license_key = data.get("license_key")
 
             if not license_key:
-                return Response({"error": "License key is required"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "License key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
             username = data.get("username")
             try:
@@ -332,13 +327,13 @@ class AddOrUpdateEmployeeView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Department.DoesNotExist:
-            return Response({"error": "Department not found for the organization"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Department not found for the organization"}, status=status.HTTP_400_BAD_REQUEST)
         except Designation.DoesNotExist:
-            return Response({"error": "Designation not found for the organization"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Designation not found for the organization"}, status=status.HTTP_400_BAD_REQUEST)
         except LEAVETYPE.DoesNotExist as e:
-            return Response({"error": f"Leave type not found: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": f"Leave type not found: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -351,20 +346,20 @@ class AddAttendanceRecordView(APIView):
             employee_id = data.get("employee_id")
             punch_time_str = data.get("time")  # renamed from check_in_time/check_out_time
             if not (license_key and employee_id and punch_time_str):
-                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Get organization from license key
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Get employee
             try:
                 employee = Employees.objects.get(id=employee_id)
             except Employees.DoesNotExist:
-                return Response({"error": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Get config
             config = Configuration.objects.filter(
@@ -372,10 +367,11 @@ class AddAttendanceRecordView(APIView):
                 workshift=employee.workshift
             ).first()
             if not config:
-                return Response({"error": "Shift configuration not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Shift configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Parse time
             today = date.today()
+        
             punch_time = datetime.strptime(punch_time_str, "%H:%M:%S")
 
             # Determine whether it's a check-in or check-out
@@ -387,7 +383,7 @@ class AddAttendanceRecordView(APIView):
                 # Determine default fallback (e.g., based on whether check-in already exists)
                 existing = AttendanceRecords.objects.filter(employee_id=employee, date=today).first()
                 is_check_in = not existing or not existing.check_in_time
-
+                
             # ---- Create or update logic ----
             attendance, created = AttendanceRecords.objects.get_or_create(
                 employee_id=employee,
@@ -403,13 +399,12 @@ class AddAttendanceRecordView(APIView):
                     "is_overtime": False,
                 }
             )
-
             message = "Attendance record updated"
 
             # Check holiday
             is_today_holiday = leaveDaysOfThisYearWise.objects.filter(
                 organization_id=organization,
-                leave_date__date=today,
+                leave_date=today,
                 is_active=True
             ).exists()
 
@@ -458,7 +453,7 @@ class AddAttendanceRecordView(APIView):
             return Response({"message": message}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -469,11 +464,11 @@ class UpdateAttendanceRecordView(APIView):
         date_str = request.data.get("date")
 
         if not all([license_key, employee_id, date_str]):
-            return Response({"error": "license_key, employee_id, and date are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key, employee_id, and date are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         attendance_date = parsedate(date_str)
         if not attendance_date:
-            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Get organization
@@ -496,11 +491,71 @@ class UpdateAttendanceRecordView(APIView):
             return Response({"message": "Attendance updated successfully."}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
         except Employees.DoesNotExist:
-            return Response({"error": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
         except AttendanceRecords.DoesNotExist:
-            return Response({"error": "Attendance record not found for given employee and date."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Attendance record not found for given employee and date."}, status=status.HTTP_404_NOT_FOUND)
+        
+class AttendanceListView(APIView):
+    def get(self, request):
+        try:
+            # Optional filters
+            from_date_str = request.query_params.get("from_date")
+            to_date_str = request.query_params.get("to_date")
+            workshift = request.query_params.get("workshift")
+            department_id = request.query_params.get("department_id")
+            license_key = request.query_params.get("license_key")
+
+            if not license_key:
+                return Response({"message": "License key is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                license_obj = License.objects.get(key=license_key)
+                organization = license_obj.organization
+            except License.DoesNotExist:
+                return Response({"message": "Invalid license key."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Base queryset for organization
+            attendance_qs = AttendanceRecords.objects.filter(organization_id=organization)
+
+            # Filter by date range
+            if from_date_str and to_date_str:
+                from_date = datetime.strptime(from_date_str, "%Y-%m-%d").date()
+                to_date = datetime.strptime(to_date_str, "%Y-%m-%d").date()
+                attendance_qs = attendance_qs.filter(date__range=(from_date, to_date))
+
+            # Filter by department
+            if department_id:
+                attendance_qs = attendance_qs.filter(employee_id__department_id=department_id)
+
+            # Filter by workshift
+            if workshift:
+                attendance_qs = attendance_qs.filter(employee_id__workshift=workshift)
+
+            # Prepare response data
+            data = []
+            for record in attendance_qs.select_related("employee_id", "employee_id__department", "employee_id__designation"):
+                data.append({
+                    "employee_id": record.employee_id.id,
+                    "employee_name": record.employee_id.full_name,
+                    "department": record.employee_id.department.department_name,
+                    "designation": record.employee_id.designation.designation_name,
+                    "workshift": record.employee_id.workshift,
+                    "date": record.date.strftime("%Y-%m-%d"),
+                    "check_in": record.check_in_time.strftime("%I:%M %p") if record.check_in_time else "00:00",
+                    "check_out": record.check_out_time.strftime("%I:%M %p") if record.check_out_time else "00:00",
+                    "present_one": record.present_one,
+                    "present_two": record.present_two,
+                    "work_hours": record.work_hours,
+                    "overtime_hours": record.overtime_hours,
+                    "is_overtime": record.is_overtime,
+                })
+
+            return Response({"records": data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class EmployeeListView(APIView):
     def get(self, request):
@@ -511,13 +566,13 @@ class EmployeeListView(APIView):
         work_shift = request.GET.get("work_shift")
         print(license_key)
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
             organization = license.organization
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
         # Base queryset: employees of the organization
         employees = Employees.objects.filter(organization_id=organization)
@@ -550,7 +605,7 @@ class EmployeeLeaveDetailsByUserId(APIView):
             return Response(serialized_data.data, status=status.HTTP_200_OK)
 
         except CustomUser.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -566,13 +621,13 @@ class FilterLeaveRequestsAPIView(APIView):
             end_date = data.get("end_date")            # Optional
 
             if not license_key:
-                return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
             # Base QuerySet: all leaves in the organization
             queryset = LeaveMangement.objects.filter(organization_id=organization)
@@ -589,14 +644,14 @@ class FilterLeaveRequestsAPIView(APIView):
                     start = datetime.strptime(start_date, "%Y-%m-%d").date()
                     queryset = queryset.filter(start_date__gte=start)
                 except ValueError:
-                    return Response({"error": "Invalid start_date format (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"message": "Invalid start_date format (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
 
             if end_date:
                 try:
                     end = datetime.strptime(end_date, "%Y-%m-%d").date()
                     queryset = queryset.filter(end_date__lte=end)
                 except ValueError:
-                    return Response({"error": "Invalid end_date format (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"message": "Invalid end_date format (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Format result
             leave_list = []
@@ -615,7 +670,7 @@ class FilterLeaveRequestsAPIView(APIView):
             return Response({"leave_requests": leave_list}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 
@@ -628,13 +683,13 @@ class AddDeviceView(APIView):
         license_key = data.get("license_key")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
             organization = license.organization
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
         # Inject the resolved organization into the serializer
         device_data = data.copy()
@@ -644,7 +699,7 @@ class AddDeviceView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Device added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
     
 
@@ -654,13 +709,13 @@ class ListDeviceByLicenseView(APIView):
         license_key = request.GET.get("license_key")
         
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             license = License.objects.get(key=license_key)
             organization = license.organization
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         
         devices = DeviceSetting.objects.filter(organization_id=organization).order_by("device_name")
         serializer = seri.DeviceSettingSerializer(devices, many=True)
@@ -671,24 +726,24 @@ class UpdateDeviceView(APIView):
         license_key = request.data.get("license_key")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
             organization = license.organization
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             device = DeviceSetting.objects.get(pk=pk, organization_id=organization)
         except DeviceSetting.DoesNotExist:
-            return Response({"error": "Device not found for this organization"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Device not found for this organization"}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = seri.DeviceSettingSerializer(device, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Device updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
     
 
@@ -696,18 +751,19 @@ class UpdateDeviceView(APIView):
 
 
 class AddDepartmentView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         try:
             license_key = request.data.get("license_key")
             department_name = request.data.get("name")
 
             if not license_key or not department_name:
-                return Response({"error": "License key and department name are required"}, status=400)
+                return Response({"message": "License key and department name are required"}, status=400)
 
             try:
                 license = License.objects.get(key=license_key)
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=400)
+                return Response({"message": "Invalid license key"}, status=400)
 
             department = Department.objects.create(
                 department_name=department_name,
@@ -716,43 +772,45 @@ class AddDepartmentView(APIView):
 
             return Response({"message": "Department added successfully", "id": department.id}, status=201)
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"message": str(e)}, status=500)
 
 
 # ----------------- Update Department -----------------
 class UpdateDepartmentView(APIView):
+    permission_classes = [IsAuthenticated]
     def put(self, request, department_id):
         try:
             department_name = request.data.get("name")
             if not department_name:
-                return Response({"error": "Department name is required"}, status=400)
+                return Response({"message": "Department name is required"}, status=400)
 
             try:
                 department = Department.objects.get(id=department_id)
             except Department.DoesNotExist:
-                return Response({"error": "Department not found"}, status=404)
+                return Response({"message": "Department not found"}, status=404)
 
             department.name = department_name
             department.save()
 
             return Response({"message": "Department updated successfully"}, status=200)
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"message": str(e)}, status=500)
 
 # ----------------- Add Designation -----------------
 class AddDesignationView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         try:
             license_key = request.data.get("license_key")
             designation_name = request.data.get("designation_name")
 
             if not license_key or not designation_name:
-                return Response({"error": "License key and designation name are required"}, status=400)
+                return Response({"message": "License key and designation name are required"}, status=400)
 
             try:
                 license = License.objects.get(key=license_key)
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=400)
+                return Response({"message": "Invalid license key"}, status=400)
 
             designation = Designation.objects.create(
                 designation_name=designation_name,
@@ -761,27 +819,28 @@ class AddDesignationView(APIView):
 
             return Response({"message": "Designation added successfully", "id": designation.id}, status=201)
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"message": str(e)}, status=500)
 
 # ----------------- Update Designation -----------------
 class UpdateDesignationView(APIView):
+    permission_classes = [IsAuthenticated]
     def put(self, request, designation_id):
         try:
             designation_name = request.data.get("designation_name")
             if not designation_name:
-                return Response({"error": "Designation name is required"}, status=400)
+                return Response({"message": "Designation name is required"}, status=400)
 
             try:
                 designation = Designation.objects.get(id=designation_id)
             except Designation.DoesNotExist:
-                return Response({"error": "Designation not found"}, status=404)
+                return Response({"message": "Designation not found"}, status=404)
 
             designation.designation_name = designation_name
             designation.save()
 
             return Response({"message": "Designation updated successfully"}, status=200)
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"message": str(e)}, status=500)
 
         
 
@@ -798,7 +857,7 @@ class AddOrganizationView(APIView):
             organization_details = data.get("organization_details")
 
             if not all([user_id, organization_name]):
-                return Response({"error": "Required fields missing"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Required fields missing"}, status=status.HTTP_400_BAD_REQUEST)
 
             user = get_object_or_404(CustomUser, id=user_id)
 
@@ -812,31 +871,32 @@ class AddOrganizationView(APIView):
             return Response({"message": "Organization created successfully", "organization_id": organization.id}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ListDepartmentsByLicenseView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         license_key = request.GET.get("license_key")
         
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
             organization = license.organization
 
-            departments = Department.objects.filter(organization_id=organization, is_active=True)
+            departments = Department.objects.filter(organization_id=organization)
             department_list = [
-                {"id": dept.id, "department_name": dept.department_name}
+                {"id": dept.id, "department_name": dept.department_name,"is_active":dept.is_active}
                 for dept in departments
             ]
 
             return Response({"departments": department_list}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ListDesignationsByLicenseView(APIView):
@@ -844,7 +904,7 @@ class ListDesignationsByLicenseView(APIView):
         license_key = request.GET.get("license_key")
         
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
@@ -859,9 +919,9 @@ class ListDesignationsByLicenseView(APIView):
             return Response({"designations": designation_list}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UpdateOrganizationView(APIView):
@@ -880,7 +940,7 @@ class UpdateOrganizationView(APIView):
             return Response({"message": "Organization updated successfully"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class HRDashboardView(APIView):
@@ -888,13 +948,13 @@ class HRDashboardView(APIView):
         try:
             license_key = request.data.get("license_key")
             if not license_key:
-                return Response({"error": "License key is required"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "License key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
 
             today = datetime.today().date()
             current_month = today.month
@@ -1001,7 +1061,7 @@ class HRDashboardView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class AddOrUpdateEmployeeLeaveDetailView(APIView):
     def post(self, request):
@@ -1014,26 +1074,26 @@ class AddOrUpdateEmployeeLeaveDetailView(APIView):
             leave_detail_id = data.get("leave_detail_id")  # optional
 
             if not all([license_key, user_id, leave_type_id]):
-                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Validate license key and get organization
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Validate employee belongs to organization
             try:
                 employee = Employees.objects.get(user__id=user_id, organization_id=organization)
             except Employees.DoesNotExist:
-                return Response({"error": "Employee not found in organization"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Employee not found in organization"}, status=status.HTTP_404_NOT_FOUND)
 
             # Validate leave type
             try:
                 leave_type = LEAVETYPE.objects.get(id=leave_type_id)
             except LEAVETYPE.DoesNotExist:
-                return Response({"error": "Invalid leave type"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid leave type"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Update flow
             if leave_detail_id:
@@ -1045,7 +1105,7 @@ class AddOrUpdateEmployeeLeaveDetailView(APIView):
                     leave_detail.save()
                     return Response({"message": "Leave detail updated"}, status=status.HTTP_200_OK)
                 except EmployeeLeaveDetails.DoesNotExist:
-                    return Response({"error": "Leave detail not found"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"message": "Leave detail not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Check if leave type already exists for this employee
             existing = EmployeeLeaveDetails.objects.filter(
@@ -1055,7 +1115,7 @@ class AddOrUpdateEmployeeLeaveDetailView(APIView):
 
             if existing:
                 return Response(
-                    {"error": f"Leave type '{leave_type.leave_type}' already exists for this employee."},
+                    {"message": f"Leave type '{leave_type.leave_type}' already exists for this employee."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -1071,7 +1131,7 @@ class AddOrUpdateEmployeeLeaveDetailView(APIView):
             )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         
 
@@ -1088,38 +1148,38 @@ class RequestLeaveAPIView(APIView):
             remarks = data.get("remarks", "")
            
             if not all([license_key, user_id, leave_type_id, start_date, end_date]):
-                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Validate license and organization
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Get employee and leave type
             try:
                 employee = Employees.objects.get(user__id=user_id, organization_id=organization)
                 leave_type = LEAVETYPE.objects.get(id=leave_type_id)
             except (Employees.DoesNotExist, LEAVETYPE.DoesNotExist):
-                return Response({"error": "Employee or Leave Type not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Employee or Leave Type not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Calculate leave days
             start = datetime.strptime(start_date, "%Y-%m-%d").date()
             end = datetime.strptime(end_date, "%Y-%m-%d").date()
             leave_days = (end - start).days + 1
             if leave_days <= 0:
-                return Response({"error": "End date must be after start date"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "End date must be after start date"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Get employee's leave balance
             try:
                 leave_detail = EmployeeLeaveDetails.objects.get(employee_id=employee.user, employee_leave_type=leave_type)
             except EmployeeLeaveDetails.DoesNotExist:
-                return Response({"error": "Leave type not assigned to this employee"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Leave type not assigned to this employee"}, status=status.HTTP_404_NOT_FOUND)
 
             if leave_days > leave_detail.leave_count:
                 return Response({
-                    "error": "Insufficient leave balance",
+                    "message": "Insufficient leave balance",
                     "available": leave_detail.leave_count,
                     "requested": leave_days
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -1138,7 +1198,7 @@ class RequestLeaveAPIView(APIView):
             return Response({"message": "Leave request submitted successfully"}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
 
@@ -1151,15 +1211,15 @@ class ApproveOrRejectLeaveAPIView(APIView):
             action = data.get("action")  # "approve" or "reject"
 
             if not leave_id or action not in ["approve", "reject"]:
-                return Response({"error": "Invalid leave ID or action"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid leave ID or action"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 leave_request = LeaveMangement.objects.get(id=leave_id)
             except LeaveMangement.DoesNotExist:
-                return Response({"error": "Leave request not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Leave request not found"}, status=status.HTTP_404_NOT_FOUND)
 
             if leave_request.status != "Pending":
-                return Response({"error": f"Leave already {leave_request.status}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": f"Leave already {leave_request.status}"}, status=status.HTTP_400_BAD_REQUEST)
 
             if action == "approve":
                 # Deduct leave count
@@ -1169,7 +1229,7 @@ class ApproveOrRejectLeaveAPIView(APIView):
                         employee_leave_type=leave_request.leave_type
                     )
                     if leave_detail.leave_count < leave_request.leave_days:
-                        return Response({"error": "Insufficient leave balance during approval"}, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({"message": "Insufficient leave balance during approval"}, status=status.HTTP_400_BAD_REQUEST)
 
                     leave_detail.leave_count -= leave_request.leave_days
                     leave_detail.save()
@@ -1177,7 +1237,7 @@ class ApproveOrRejectLeaveAPIView(APIView):
                     leave_request.save()
                     return Response({"message": "Leave approved"}, status=status.HTTP_200_OK)
                 except EmployeeLeaveDetails.DoesNotExist:
-                    return Response({"error": "Employee leave details not found"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"message": "Employee leave details not found"}, status=status.HTTP_404_NOT_FOUND)
 
             elif action == "reject":
                 leave_request.status = "Rejected"
@@ -1185,7 +1245,7 @@ class ApproveOrRejectLeaveAPIView(APIView):
                 return Response({"message": "Leave rejected"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class AddOrUpdateConfigurationView(APIView):
@@ -1196,14 +1256,14 @@ class AddOrUpdateConfigurationView(APIView):
             workshift = data.get("workshift")
 
             if not license_key or not workshift:
-                return Response({"error": "License key and workshift are required"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "License key and workshift are required"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Get organization from license key
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
             # Check if Configuration exists
             config, created = Configuration.objects.get_or_create(
@@ -1226,7 +1286,7 @@ class AddOrUpdateConfigurationView(APIView):
             return Response({"message": message}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 
@@ -1235,7 +1295,7 @@ class ListConfigurationByLicenseKeyView(APIView):
         license_key = request.GET.get("license_key")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
@@ -1260,9 +1320,9 @@ class ListConfigurationByLicenseKeyView(APIView):
             return Response({"configurations": result}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
    
 class AddOrUpdateHolidayView(APIView):
@@ -1276,18 +1336,18 @@ class AddOrUpdateHolidayView(APIView):
             created_by_id = data.get("created_by")
 
             if not (license_key and leave_name and leave_date and created_by_id):
-                return Response({"error": "Required fields: license_key, leave_name, leave_date, created_by"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Required fields: license_key, leave_name, leave_date, created_by"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Validate license
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
             leave_date = parse_date(leave_date)  
             if not leave_date:
-                return Response({"error": "Invalid leave_date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Invalid leave_date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
 
             created_by = CustomUser.objects.get(id=created_by_id)
 
@@ -1296,7 +1356,7 @@ class AddOrUpdateHolidayView(APIView):
                 try:
                     leave_obj = leaveDaysOfThisYearWise.objects.get(id=leave_id, organization_id=organization)
                 except leaveDaysOfThisYearWise.DoesNotExist:
-                    return Response({"error": "Leave day not found"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response({"message": "Leave day not found"}, status=status.HTTP_404_NOT_FOUND)
 
                 leave_obj.leave_name = leave_name
                 leave_obj.leave_date = leave_date
@@ -1311,7 +1371,7 @@ class AddOrUpdateHolidayView(APIView):
                 ).first()
 
                 if existing:
-                    return Response({"error": "A leave already exists on this date"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"message": "A leave already exists on this date"}, status=status.HTTP_400_BAD_REQUEST)
 
                 leaveDaysOfThisYearWise.objects.create(
                     organization_id=organization,
@@ -1323,9 +1383,9 @@ class AddOrUpdateHolidayView(APIView):
                 return Response({"message": "Leave day added successfully"}, status=status.HTTP_201_CREATED)
 
         except CustomUser.DoesNotExist:
-            return Response({"error": "Created by user not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Created by user not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class ListHolidaysView(APIView):
@@ -1335,7 +1395,7 @@ class ListHolidaysView(APIView):
         month = request.GET.get("month")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
@@ -1364,16 +1424,16 @@ class ListHolidaysView(APIView):
             return Response({"leaves": results}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class DeleteHolidayView(APIView):
     def delete(self, request, leave_id):
         license_key = request.GET.get("license_key")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
@@ -1386,10 +1446,10 @@ class DeleteHolidayView(APIView):
                 return Response({"message": "Leave marked as inactive"}, status=status.HTTP_200_OK)
 
             except leaveDaysOfThisYearWise.DoesNotExist:
-                return Response({"error": "Leave not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Leave not found"}, status=status.HTTP_404_NOT_FOUND)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
 
 
@@ -1429,7 +1489,7 @@ class GenerateOrUpdatePayrollView(APIView):
             license = License.objects.get(key=license_key)
             organization = license.organization
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
 
         start_date, end_date = get_first_day_and_today()
         total_working_days = (end_date - start_date).days + 1
@@ -1497,13 +1557,13 @@ class AddOrUpdateLeaveTypeView(APIView):
             leave_type = data.get("leave_type")
 
             if not license_key or not leave_type:
-                return Response({"error": "Both license_key and leave_type are required"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Both license_key and leave_type are required"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
-                return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
             leave_type = leave_type.strip().upper()
 
@@ -1524,7 +1584,7 @@ class AddOrUpdateLeaveTypeView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class ListLeaveTypesByLicenseView(APIView):
@@ -1534,7 +1594,7 @@ class ListLeaveTypesByLicenseView(APIView):
         license_key = request.GET.get("license_key")
 
         if not license_key:
-            return Response({"error": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             license = License.objects.get(key=license_key)
@@ -1553,6 +1613,6 @@ class ListLeaveTypesByLicenseView(APIView):
             return Response({"leave_types": result}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
-            return Response({"error": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

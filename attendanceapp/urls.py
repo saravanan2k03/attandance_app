@@ -23,6 +23,8 @@ urlpatterns = [
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),
     path('api/attendance/update/', views.UpdateAttendanceRecordView.as_view(), name='update-attendance'),
     path('api/payroll/generate/', views.GenerateOrUpdatePayrollView.as_view(), name='generate_payroll'),
+    path('api/attendance/list/', views.AttendanceListView.as_view(), name='attendance-list'),
+
     # --- Leave Management ---
     path('api/leaves/request/', views.RequestLeaveAPIView.as_view(), name='request_leave'),
     path('api/leaves/filter/', views.FilterLeaveRequestsAPIView.as_view(), name='filter_leaves'),
