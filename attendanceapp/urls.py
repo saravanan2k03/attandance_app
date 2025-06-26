@@ -48,7 +48,7 @@ urlpatterns = [
 
     path('api/config/add-or-update/', views.AddOrUpdateConfigurationView.as_view(), name='add_or_update_config'),
     path('api/configurations/', views.ListConfigurationByLicenseKeyView.as_view(), name='list-configurations-by-license'),
-
+    path("reports/module/", views.ReportsModuleView.as_view(), name="reports-module"),
 
     path('api/leave-type/', views.AddOrUpdateLeaveTypeView.as_view(), name='add_or_update_leave_type'),
     path('api/leave-type/list/', views.ListLeaveTypesByLicenseView.as_view(), name='list-leave-types'),
@@ -59,4 +59,6 @@ urlpatterns = [
     # --- HR Dashboard ---
     path('api/dashboard/hr/', views.HRDashboardView.as_view(), name='hr_dashboard'),
     path('api/attendance/dashboard/', views.EmployeeDashboardView.as_view(), name='attendance-dashboard'),
+    path('api/license/check/', views.CheckLicenseKeyView.as_view(), name='check_license'),
+
 ]

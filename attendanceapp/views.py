@@ -280,8 +280,11 @@ class AddOrUpdateEmployeeView(APIView):
             employee.joining_date = data.get("joining_date")
             employee.work_status = data.get("work_status", True)
             employee.basic_salary = data.get("basic_salary", 0.0)
+            employee.gosi_deduction_amount= data.get("gosi_deduction_amount", 0.0)
+            employee.over_time_salary = data.get("over_time_salary", 0.0)
             employee.gosi_applicable = data.get("gosi_applicable", True)
             employee.filename = data.get("filename", employee.filename)
+            employee.address = data.get("address", employee.address)
             employee.organization = organization
 
             if profile_pic:
@@ -497,6 +500,70 @@ class UpdateAttendanceRecordView(APIView):
         except AttendanceRecords.DoesNotExist:
             return Response({"message": "Attendance record not found for given employee and date."}, status=status.HTTP_404_NOT_FOUND)
         
+
+class ReportsModuleView(APIView):
+    permission_classes = [IsAuthenticated]  # Optional: Protect endpoint
+
+    def get(self, request):
+        try:
+            organization = request.user.user_details.organization  # Adjust if using org differently
+
+            # === Attendance Reports ===
+            attendance_records = AttendanceRecords.objects.filter(
+                organization_id=organization
+            ).values(
+                'employee_id__full_name', 'date',
+                'present_one', 'present_two',
+                'check_in_time', 'check_out_time',
+                'work_hours', 'is_overtime', 'overtime_hours'
+            )
+
+            # === Salary Sheets ===
+            payroll_records = PayrollRecords.objects.filter(
+                organization_id=organization
+            ).values(
+                'employee_id__full_name', 'month', 'basic_salary',
+                'allowance', 'deduction', 'net_salary',
+                'present_days', 'absent_days',
+                'over_time_salary'
+            )
+
+            # === Leave Summary ===
+            leave_summary = LeaveMangement.objects.filter(
+                organization_id=organization
+            ).values(
+                'employee_id__full_name', 'leave_type__leave_type',
+                'start_date', 'end_date', 'leave_days',
+                'status', 'remarks'
+            )
+
+            # === GOSI Summary ===
+            gosi_summary = Employees.objects.filter(
+                organization=organization,
+                gosi_applicable=True
+            ).values(
+                'full_name', 'iqama_number', 'basic_salary',
+                'gosi_deduction_amount'
+            )
+
+            return Response({
+                "attendance_reports": list(attendance_records),
+                "salary_sheets": list(payroll_records),
+                "leave_summary": list(leave_summary),
+                "gosi_summary": list(gosi_summary)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+class CheckLicenseKeyView(APIView):
+    def get(self, request):
+        key = request.query_params.get("license_key")
+
+        if not key:
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        exists = License.objects.filter(key=key).exists()
+        return Response({"activated": exists}, status=status.HTTP_200_OK)  
 class AttendanceListView(APIView):
     def get(self, request):
         try:
@@ -564,7 +631,7 @@ class EmployeeListView(APIView):
         department = request.GET.get("department")
         designation = request.GET.get("designation")
         work_shift = request.GET.get("work_shift")
-        print(license_key)
+
         if not license_key:
             return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -574,10 +641,8 @@ class EmployeeListView(APIView):
         except License.DoesNotExist:
             return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Base queryset: employees of the organization
         employees = Employees.objects.filter(organization_id=organization)
 
-        # Optional filters
         if gender:
             employees = employees.filter(gender__iexact=gender)
         if department:
@@ -587,8 +652,22 @@ class EmployeeListView(APIView):
         if work_shift:
             employees = employees.filter(workshift__iexact=work_shift)
 
-        serializer = seri.EmployeesSerializer(employees, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # Return only specific fields
+        data = [
+            {
+                "id": emp.id,
+                "full_name": emp.full_name,
+                "gender": emp.gender,
+                "department": emp.department.department_name if emp.department else None,
+                "designation": emp.designation.designation_name if emp.designation else None,
+                "work_status": emp.work_status,
+                "mob_no": emp.mob_no,
+                "email": emp.user.email if emp.user else None,
+            }
+            for emp in employees
+        ]
+
+        return Response(data, status=status.HTTP_200_OK)
 
 
     
@@ -742,7 +821,7 @@ class UpdateDeviceView(APIView):
         serializer = seri.DeviceSettingSerializer(device, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "Device updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"message": "Device updated successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
     

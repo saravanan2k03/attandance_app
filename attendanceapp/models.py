@@ -104,6 +104,7 @@ class Employees(models.Model):
     nationality = models.CharField(max_length=255,null=True,blank=True)
     iqama_number = models.CharField(max_length=255,null=True,blank=True)
     mob_no = models.CharField(max_length=16,null=True,blank=True)
+    address = models.CharField(max_length=16,null=True,blank=True)
     joining_date = models.DateField(null=False,blank=False)
     work_status = models.BooleanField(default=True)	
     basic_salary = models.FloatField(default=0)
