@@ -17,12 +17,14 @@ urlpatterns = [
     # --- Employee Management ---
     path('api/employees/add-or-update/', views.AddOrUpdateEmployeeView.as_view(), name='add_or_update_employee'),
     path('api/employees/list/', views.EmployeeListView.as_view(), name='list_employees'),
+    path("api/employees/<int:employee_id>/details/", views.GetEmployeeDetailView.as_view()),
     path('api/employees/leave-details/<int:user_id>/', views.EmployeeLeaveDetailsByUserId.as_view(), name='employee_leave_details'),
     path('api/employees/leave-details/add-or-update/', views.AddOrUpdateEmployeeLeaveDetailView.as_view(), name='add_update_employee_leave_detail'),
     # --- Attendance & Payroll ---
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),
-    path('api/attendance/update/', views.UpdateAttendanceRecordView.as_view(), name='update-attendance'),
+    path('api/attendance/update/<int:pk>/', views.UpdateAttendanceRecordView.as_view(), name='update_attendance_by_id'),
     path('api/payroll/generate/', views.GenerateOrUpdatePayrollView.as_view(), name='generate_payroll'),
+    path('api/list-payroll/', views.ListPayrollRecordsView.as_view(), name='list-payroll'),
     path('api/attendance/list/', views.AttendanceListView.as_view(), name='attendance-list'),
 
     # --- Leave Management ---
@@ -54,6 +56,7 @@ urlpatterns = [
     path('api/leave-type/list/', views.ListLeaveTypesByLicenseView.as_view(), name='list-leave-types'),
     # --- Device Management ---
     path('api/devices/add/', views.AddDeviceView.as_view(), name='add_device'),
+    path('api/devices/add-or-update/', views.DeviceAddOrUpdateView.as_view(), name='add_or_update_device'),
     path('api/devices/list/', views.ListDeviceByLicenseView.as_view(), name='list_devices'),
     path('api/devices/update/<int:pk>/', views.UpdateDeviceView.as_view(), name='update_device'),
     # --- HR Dashboard ---

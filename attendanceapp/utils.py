@@ -8,3 +8,11 @@ def validate_query_param(param_value):
     """
     pattern = r'^[a-zA-Z0-9]*$'  
     return bool(re.match(pattern, param_value))
+
+
+def to_bool(value, default=True):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+    return default

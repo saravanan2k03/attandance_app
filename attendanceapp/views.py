@@ -28,6 +28,8 @@ from django.utils.dateparse import parse_datetime
 from django.template.loader import render_to_string
 from django.core.mail import EmailMessage
 from django.utils.dateparse import parse_date
+
+from attendanceapp.utils import to_bool
 # Create your views here.
 def members(request):
     return HttpResponse("Hello world!")
@@ -146,8 +148,8 @@ class EmployeeDashboardView(APIView):
         license_key = request.query_params.get("license_key")
         employee_id = request.query_params.get("employee_id")
 
-        if not license_key or not employee_id:
-            return Response({"message": "license_key and employee_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+        # if not license_key or not employee_id:
+        #     return Response({"message": "license_key and employee_id are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # 1. Get organization by license
@@ -155,7 +157,7 @@ class EmployeeDashboardView(APIView):
             organization = license_obj.organization
 
             # 2. Get employee and ensure belongs to organization
-            employee = Employees.objects.get(id=employee_id, organization=organization)
+            employee = Employees.objects.get(id=employee_id)
 
             # 3. Date range for current month
             today = now().date()
@@ -225,16 +227,15 @@ class EmployeeDashboardView(APIView):
 
 
 class AddOrUpdateEmployeeView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
     permission_classes = [IsAuthenticated]
-
+     
     def post(self, request):
         try:
             data = request.data
             profile_pic = request.FILES.get("profile_pic", None)
             document = request.FILES.get("document", None)
             license_key = data.get("license_key")
-
+            print(data)
             if not license_key:
                 return Response({"message": "License key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -244,14 +245,28 @@ class AddOrUpdateEmployeeView(APIView):
             except License.DoesNotExist:
                 return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
-            username = data.get("username")
-            try:
-                user = CustomUser.objects.get(username=username)
-                is_update = True
-            except CustomUser.DoesNotExist:
-                user = CustomUser(username=username)
-                is_update = False
+            employee_id = data.get("employee_id")
+            is_update = False
 
+            # Get or create user
+            if employee_id:
+                try:
+                    employee = Employees.objects.get(id=employee_id)
+                    user = employee.user
+                    is_update = True
+                except Employees.DoesNotExist:
+                    return Response({"message": "Employee with provided ID not found"}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                username = data.get("username")
+                if not username:
+                    return Response({"message": "Username is required for new employee"}, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    user = CustomUser.objects.get(username=username)
+                    return Response({"message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+                except CustomUser.DoesNotExist:
+                    user = CustomUser(username=username)
+
+            # Update user fields
             user.email = data.get("email", user.email)
             user.first_name = data.get("first_name", user.first_name)
             user.last_name = data.get("last_name", user.last_name)
@@ -260,17 +275,17 @@ class AddOrUpdateEmployeeView(APIView):
                 user.password = make_password(data.get("password"))
             user.save()
 
-            # Foreign Keys
+            # Get related models
             department = Department.objects.get(id=data["department_id"], organization_id=organization.id)
             designation = Designation.objects.get(id=data["designation_id"], organization_id=organization.id)
 
-            try:
-                employee = Employees.objects.get(user=user)
-            except Employees.DoesNotExist:
+            if not employee_id:
                 employee = Employees(user=user)
 
+            # Update employee fields
             employee.full_name = f"{user.first_name} {user.last_name}"
             employee.department = department
+            
             employee.designation = designation
             employee.date_of_birth = data.get("date_of_birth")
             employee.gender = data.get("gender", employee.gender)
@@ -278,24 +293,25 @@ class AddOrUpdateEmployeeView(APIView):
             employee.iqama_number = data.get("iqama_number", employee.iqama_number)
             employee.mob_no = data.get("mob_no", employee.mob_no)
             employee.joining_date = data.get("joining_date")
-            employee.work_status = data.get("work_status", True)
+            employee.work_status = to_bool(data.get("work_status"), True)
+            employee.gosi_applicable = to_bool(data.get("gosi_applicable"), True)
             employee.basic_salary = data.get("basic_salary", 0.0)
-            employee.gosi_deduction_amount= data.get("gosi_deduction_amount", 0.0)
+            employee.gosi_deduction_amount = data.get("gosi_deduction_amount", 0.0)
             employee.over_time_salary = data.get("over_time_salary", 0.0)
-            employee.gosi_applicable = data.get("gosi_applicable", True)
+            # employee.gosi_applicable = data.get("gosi_applicable", True)
             employee.filename = data.get("filename", employee.filename)
             employee.address = data.get("address", employee.address)
+            employee.finger_print_code = data.get("finger_print_code", employee.finger_print_code)
             employee.organization = organization
 
             if profile_pic:
                 employee.profile_pic = profile_pic
-
             if document:
                 employee.file = document
 
             employee.save()
 
-            # Handle Leave Details
+            # Leave Details
             leave_details = data.get("leave_details", [])
             if isinstance(leave_details, str):
                 leave_details = json.loads(leave_details)
@@ -314,19 +330,9 @@ class AddOrUpdateEmployeeView(APIView):
                 leave_detail_obj.leave_count = leave_count
                 leave_detail_obj.save()
 
-            # Return leave details (if any)
-            leave_data = []
-            leave_objs = EmployeeLeaveDetails.objects.filter(employee_id=user)
-            for leave in leave_objs:
-                leave_data.append({
-                    "leave_type": leave.employee_leave_type.leave_type,
-                    "leave_count": leave.leave_count
-                })
-
             msg = "updated" if is_update else "added"
             return Response({
-                "message": f"Employee and leave details {msg} successfully",
-                # "leave_details": leave_data
+                "message": f"Employee and leave details {msg} successfully"
             }, status=status.HTTP_200_OK)
 
         except Department.DoesNotExist:
@@ -338,6 +344,58 @@ class AddOrUpdateEmployeeView(APIView):
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class GetEmployeeDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, employee_id):
+        print(employee_id)
+        try:
+            employee = Employees.objects.select_related('user', 'department', 'designation').get(id=employee_id)
+
+            leave_data = []
+            leaves = EmployeeLeaveDetails.objects.filter(employee_id=employee.user)
+            for leave in leaves:
+                leave_data.append({
+                    "leave_type": leave.employee_leave_type.leave_type,
+                    "leave_count": leave.leave_count
+                })
+            print(employee.profile_pic.url)
+            data = {
+                "id": employee.id,
+                "username": employee.user.username,
+                "email": employee.user.email,
+                "first_name": employee.user.first_name,
+                "last_name": employee.user.last_name,
+                "finger_print_code": employee.finger_print_code,
+                "department_id": employee.department.id,
+                "department_name": employee.department.department_name,
+                "designation_id": employee.designation.id,
+                "designation_name": employee.designation.designation_name,
+                "date_of_birth": str(employee.date_of_birth),
+                "gender": employee.gender,
+                "nationality": employee.nationality,
+                "iqama_number": employee.iqama_number,
+                "mob_no": employee.mob_no,
+                "address": employee.address,
+                "joining_date": str(employee.joining_date),
+                "work_status": employee.work_status,
+                "basic_salary": employee.basic_salary,
+                "gosi_applicable": employee.gosi_applicable,
+                "gosi_deduction_amount": employee.gosi_deduction_amount,
+                "filename": employee.filename,
+                "workshift": employee.workshift,
+                "over_time_salary": employee.over_time_salary,
+                "user_type": employee.user.user_type,
+                "profile_pic": employee.profile_pic.url if employee.profile_pic else None,
+                "leave_details": leave_data,
+            }
+
+            return Response({"message": "Success", "data": data}, status=status.HTTP_200_OK)
+        except Employees.DoesNotExist:
+            return Response({"message": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 ###########need to Work###################
@@ -461,44 +519,36 @@ class AddAttendanceRecordView(APIView):
 
 
 class UpdateAttendanceRecordView(APIView):
-    def put(self, request):
+    def patch(self, request, pk):  # Use path param for attendance_id
         license_key = request.data.get("license_key")
-        employee_id = request.data.get("employee_id")
-        date_str = request.data.get("date")
-
-        if not all([license_key, employee_id, date_str]):
-            return Response({"message": "license_key, employee_id, and date are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        attendance_date = parsedate(date_str)
-        if not attendance_date:
-            return Response({"message": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        if not license_key:
+            return Response({"message": "license_key is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Get organization
+            # Validate license and organization
             license_obj = License.objects.get(key=license_key)
             organization = license_obj.organization
 
-            # Get employee
-            employee = Employees.objects.get(id=employee_id, organization=organization)
+            # Get attendance record by ID and organization
+            attendance = AttendanceRecords.objects.get(id=pk, organization_id=organization)
 
-            # Get attendance record
-            attendance = AttendanceRecords.objects.get(employee_id=employee, organization_id=organization, date=attendance_date)
-
-            # Optional fields: only update if provided
-            optional_fields = ['check_in_time', 'check_out_time', 'present_one', 'present_two', 'work_hours', 'is_overtime', 'overtime_hours']
+            # Optional fields to update
+            optional_fields = [
+                'check_in_time', 'check_out_time', 'present_one', 'present_two',
+                'work_hours', 'is_overtime', 'overtime_hours'
+            ]
             for field in optional_fields:
                 if field in request.data:
-                    setattr(attendance, field, request.data[field])  # Update only if present
+                    setattr(attendance, field, request.data[field])
 
             attendance.save()
             return Response({"message": "Attendance updated successfully."}, status=status.HTTP_200_OK)
 
         except License.DoesNotExist:
             return Response({"message": "Invalid license key."}, status=status.HTTP_404_NOT_FOUND)
-        except Employees.DoesNotExist:
-            return Response({"message": "Employee not found under this organization."}, status=status.HTTP_404_NOT_FOUND)
         except AttendanceRecords.DoesNotExist:
-            return Response({"message": "Attendance record not found for given employee and date."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Attendance record not found."}, status=status.HTTP_404_NOT_FOUND)
+
         
 
 class ReportsModuleView(APIView):
@@ -564,15 +614,35 @@ class CheckLicenseKeyView(APIView):
 
         exists = License.objects.filter(key=key).exists()
         return Response({"activated": exists}, status=status.HTTP_200_OK)  
+
+
+from datetime import date, datetime
+
 class AttendanceListView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
-            # Optional filters
             from_date_str = request.query_params.get("from_date")
             to_date_str = request.query_params.get("to_date")
             workshift = request.query_params.get("workshift")
             department_id = request.query_params.get("department_id")
             license_key = request.query_params.get("license_key")
+
+            # ✅ Handle default date range
+            if not from_date_str or not to_date_str:
+                today = date.today()
+                from_date = today.replace(day=1)
+                to_date = today
+            else:
+                try:
+                    from_date = datetime.strptime(from_date_str, "%Y-%m-%d").date()
+                    to_date = datetime.strptime(to_date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    return Response(
+                        {"message": "Invalid date format. Use YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
             if not license_key:
                 return Response({"message": "License key is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -583,31 +653,26 @@ class AttendanceListView(APIView):
             except License.DoesNotExist:
                 return Response({"message": "Invalid license key."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Base queryset for organization
-            attendance_qs = AttendanceRecords.objects.filter(organization_id=organization)
+            # ✅ Queryset with filters
+            attendance_qs = AttendanceRecords.objects.filter(
+                organization_id=organization,
+                date__range=(from_date, to_date)
+            )
 
-            # Filter by date range
-            if from_date_str and to_date_str:
-                from_date = datetime.strptime(from_date_str, "%Y-%m-%d").date()
-                to_date = datetime.strptime(to_date_str, "%Y-%m-%d").date()
-                attendance_qs = attendance_qs.filter(date__range=(from_date, to_date))
-
-            # Filter by department
             if department_id:
                 attendance_qs = attendance_qs.filter(employee_id__department_id=department_id)
 
-            # Filter by workshift
             if workshift:
                 attendance_qs = attendance_qs.filter(employee_id__workshift=workshift)
 
-            # Prepare response data
             data = []
             for record in attendance_qs.select_related("employee_id", "employee_id__department", "employee_id__designation"):
                 data.append({
+                    "attendance_id": record.id,
                     "employee_id": record.employee_id.id,
                     "employee_name": record.employee_id.full_name,
-                    "department": record.employee_id.department.department_name,
-                    "designation": record.employee_id.designation.designation_name,
+                    "department": getattr(record.employee_id.department, "departmentName", "N/A"),
+                    "designation": getattr(record.employee_id.designation, "designationName", "N/A"),
                     "workshift": record.employee_id.workshift,
                     "date": record.date.strftime("%Y-%m-%d"),
                     "check_in": record.check_in_time.strftime("%I:%M %p") if record.check_in_time else "00:00",
@@ -622,7 +687,10 @@ class AttendanceListView(APIView):
             return Response({"records": data}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Helpful for debugging - remove in production
+            return Response({"message": f"Internal error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 class EmployeeListView(APIView):
     def get(self, request):
@@ -641,7 +709,7 @@ class EmployeeListView(APIView):
         except License.DoesNotExist:
             return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
-        employees = Employees.objects.filter(organization_id=organization)
+        employees = Employees.objects.filter(organization_id=organization).order_by("-id")
 
         if gender:
             employees = employees.filter(gender__iexact=gender)
@@ -660,6 +728,8 @@ class EmployeeListView(APIView):
                 "gender": emp.gender,
                 "department": emp.department.department_name if emp.department else None,
                 "designation": emp.designation.designation_name if emp.designation else None,
+                "work_shift": emp.workshift,
+                "date_of_join":emp.joining_date,
                 "work_status": emp.work_status,
                 "mob_no": emp.mob_no,
                 "email": emp.user.email if emp.user else None,
@@ -780,7 +850,42 @@ class AddDeviceView(APIView):
             return Response({"message": "Device added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.messages, status=status.HTTP_400_BAD_REQUEST)
 
-    
+class DeviceAddOrUpdateView(APIView):
+    def post(self, request):
+        data = request.data
+        license_key = data.get("license_key")
+        device_id = data.get("device_id")  # optional for update
+
+        if not license_key:
+            return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            license = License.objects.get(key=license_key)
+            organization = license.organization
+        except License.DoesNotExist:
+            return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+
+        device_data = data.copy()
+        device_data["organization_id"] = organization.id
+
+        if device_id:
+            try:
+                device = DeviceSetting.objects.get(id=device_id, organization_id=organization)
+            except DeviceSetting.DoesNotExist:
+                return Response({"message": "Device not found for this organization"}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = seri.DeviceSettingSerializer(device, data=device_data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Device updated successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            serializer = seri.DeviceSettingSerializer(data=device_data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Device added successfully.", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
 
 
 class ListDeviceByLicenseView(APIView):
@@ -867,8 +972,8 @@ class UpdateDepartmentView(APIView):
                 department = Department.objects.get(id=department_id)
             except Department.DoesNotExist:
                 return Response({"message": "Department not found"}, status=404)
-
-            department.name = department_name
+            print(department_name)
+            department.department_name = department_name
             department.save()
 
             return Response({"message": "Department updated successfully"}, status=200)
@@ -1324,6 +1429,7 @@ class ApproveOrRejectLeaveAPIView(APIView):
                 return Response({"message": "Leave rejected"}, status=status.HTTP_200_OK)
 
         except Exception as e:
+
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
@@ -1372,6 +1478,7 @@ class AddOrUpdateConfigurationView(APIView):
 class ListConfigurationByLicenseKeyView(APIView):
     def get(self, request):
         license_key = request.GET.get("license_key")
+        workshift = request.GET.get("workshift")  # new optional param
 
         if not license_key:
             return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1381,6 +1488,10 @@ class ListConfigurationByLicenseKeyView(APIView):
             organization = license.organization
 
             configs = Configuration.objects.filter(organization_id=organization)
+
+            # filter by workshift if provided
+            if workshift:
+                configs = configs.filter(workshift=workshift)
 
             result = []
             for config in configs:
@@ -1403,68 +1514,92 @@ class ListConfigurationByLicenseKeyView(APIView):
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
    
 class AddOrUpdateHolidayView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         try:
             data = request.data
             license_key = data.get("license_key")
             leave_name = data.get("leave_name")
-            leave_date = data.get("leave_date")  
-            leave_id = data.get("id")  # Optional
-            created_by_id = data.get("created_by")
+            leave_date_input = data.get("leave_date")
+            leave_id = data.get("id")
 
-            if not (license_key and leave_name and leave_date and created_by_id):
-                return Response({"message": "Required fields: license_key, leave_name, leave_date, created_by"}, status=status.HTTP_400_BAD_REQUEST)
+            if not (license_key and leave_name and leave_date_input):
+                return Response({"message": "Required fields: license_key, leave_name, leave_date"},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            # Validate license
             try:
                 license = License.objects.get(key=license_key)
                 organization = license.organization
             except License.DoesNotExist:
                 return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
-            leave_date = parse_date(leave_date)  
-            if not leave_date:
-                return Response({"message": "Invalid leave_date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                leave_date = datetime.strptime(leave_date_input, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                return Response({"message": "Invalid leave_date format. Use YYYY-MM-DD."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            created_by = CustomUser.objects.get(id=created_by_id)
+            is_active = data.get("is_active", True)
+            if isinstance(is_active, str):
+                is_active = is_active.lower() == "true"
+
+            # ✅ Fetch the real user instance
+            created_by = User.objects.get(id=request.user.id)
 
             if leave_id:
-                # Update
                 try:
-                    leave_obj = leaveDaysOfThisYearWise.objects.get(id=leave_id, organization_id=organization)
+                    leave_obj = leaveDaysOfThisYearWise.objects.get(
+                        id=leave_id, organization_id=organization
+                    )
                 except leaveDaysOfThisYearWise.DoesNotExist:
                     return Response({"message": "Leave day not found"}, status=status.HTTP_404_NOT_FOUND)
 
                 leave_obj.leave_name = leave_name
                 leave_obj.leave_date = leave_date
-                leave_obj.is_active = data.get("is_active", leave_obj.is_active)
+                leave_obj.is_active = is_active
                 leave_obj.save()
-                return Response({"message": "Leave day updated successfully"}, status=status.HTTP_200_OK)
+
+                return Response({
+                    "message": "Leave day updated successfully",
+                    "leave_id": leave_obj.id,
+                    "leave_name": leave_obj.leave_name,
+                    "leave_date": str(leave_obj.leave_date),
+                    "is_active": leave_obj.is_active
+                }, status=status.HTTP_200_OK)
+
             else:
-                # Create
-                existing = leaveDaysOfThisYearWise.objects.filter(
-                    organization_id=organization,
-                    leave_date=leave_date  
-                ).first()
+                if leaveDaysOfThisYearWise.objects.filter(
+                        organization_id=organization,
+                        leave_date=leave_date
+                ).exists():
+                    return Response({"message": "A leave already exists on this date"},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
-                if existing:
-                    return Response({"message": "A leave already exists on this date"}, status=status.HTTP_400_BAD_REQUEST)
-
-                leaveDaysOfThisYearWise.objects.create(
+                new_leave = leaveDaysOfThisYearWise.objects.create(
                     organization_id=organization,
                     leave_name=leave_name,
                     leave_date=leave_date,
-                    created_by=created_by,
-                    is_active=data.get("is_active", True)
+                    created_by=created_by,  # ✅ now a true CustomUser
+                    is_active=is_active
                 )
-                return Response({"message": "Leave day added successfully"}, status=status.HTTP_201_CREATED)
 
-        except CustomUser.DoesNotExist:
-            return Response({"message": "Created by user not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({
+                    "message": "Leave day added successfully",
+                    "leave_id": new_leave.id,
+                    "leave_name": new_leave.leave_name,
+                    "leave_date": str(new_leave.leave_date),
+                    "is_active": new_leave.is_active
+                }, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            import traceback
+            traceback.print_exc()
+            return Response({"message": f"{str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
         
 
 class ListHolidaysView(APIView):
@@ -1623,7 +1758,61 @@ class GenerateOrUpdatePayrollView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class ListPayrollRecordsView(APIView):
+    def post(self, request):
+        license_key = request.data.get("license_key")
+        from_date = request.data.get("from_date")
+        to_date = request.data.get("to_date")
+        work_shift = request.data.get("work_shift")
+        department_id = request.data.get("department_id")
 
+        try:
+            license = License.objects.get(key=license_key)
+            organization = license.organization
+        except License.DoesNotExist:
+            return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Default dates to current month if not provided
+        if not from_date or not to_date:
+            today = date.today()
+            from_date = today.replace(day=1)
+            to_date = today
+        else:
+            # convert strings to date objects
+            from_date = date.fromisoformat(from_date)
+            to_date = date.fromisoformat(to_date)
+
+        queryset = PayrollRecords.objects.filter(
+            organization_id=organization,
+            month__range=[from_date, to_date]
+        )
+
+        if work_shift:
+            queryset = queryset.filter(employee_id__workshift=work_shift)
+        if department_id:
+            queryset = queryset.filter(employee_id__department__id=department_id)
+
+        data = []
+        for record in queryset.select_related("employee_id__department"):
+            data.append({
+                "employee_id": record.employee_id.id,
+                "employee_name": record.employee_id.full_name,
+                "department": record.employee_id.department.department_name,
+                "month": str(record.month),
+                "basic_salary": record.basic_salary,
+                "total_days": record.total_days,
+                "present_days": record.present_days,
+                "absent_days": record.absent_days,
+                "overtime_salary": record.over_time_salary,
+                "net_salary": record.net_salary,
+                "payroll_generated": record.payroll_generated,
+            })
+
+        return Response({
+            "status": "success",
+            "organization": organization.organization_name,
+            "payroll_records": data
+        }, status=status.HTTP_200_OK)
 
 
 class AddOrUpdateLeaveTypeView(APIView):
@@ -1634,6 +1823,7 @@ class AddOrUpdateLeaveTypeView(APIView):
             data = request.data
             license_key = data.get("license_key")
             leave_type = data.get("leave_type")
+            leave_type_id = data.get("id")
 
             if not license_key or not leave_type:
                 return Response({"message": "Both license_key and leave_type are required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1646,24 +1836,36 @@ class AddOrUpdateLeaveTypeView(APIView):
 
             leave_type = leave_type.strip().upper()
 
-            try:
-                leave_obj = LEAVETYPE.objects.get(leave_type=leave_type, organization_id=organization)
-                is_update = True
-            except LEAVETYPE.DoesNotExist:
-                leave_obj = LEAVETYPE(organization_id=organization, leave_type=leave_type)
-                is_update = False
+            if leave_type_id:
+                # Try update by ID
+                try:
+                    leave_obj = LEAVETYPE.objects.get(id=leave_type_id, organization_id=organization)
+                    is_update = True
+                except LEAVETYPE.DoesNotExist:
+                    return Response({"message": "Leave type with given ID does not exist"}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # Default behavior: upsert by leave_type + org
+                try:
+                    leave_obj = LEAVETYPE.objects.get(leave_type=leave_type, organization_id=organization)
+                    is_update = True
+                except LEAVETYPE.DoesNotExist:
+                    leave_obj = LEAVETYPE(organization_id=organization, leave_type=leave_type)
+                    is_update = False
 
+            leave_obj.leave_type = leave_type  # in case we update
             leave_obj.is_active = data.get("is_active", True)
             leave_obj.save()
 
             return Response({
                 "message": f"Leave type {'updated' if is_update else 'added'} successfully",
                 "leave_type": leave_obj.leave_type,
+                "id": leave_obj.id,
                 "organization": organization.organization_name
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         
 
 class ListLeaveTypesByLicenseView(APIView):
