@@ -19,6 +19,8 @@ urlpatterns = [
     path('api/employees/list/', views.EmployeeListView.as_view(), name='list_employees'),
     path("api/employees/<int:employee_id>/details/", views.GetEmployeeDetailView.as_view()),
     path('api/employees/leave-details/<int:user_id>/', views.EmployeeLeaveDetailsByUserId.as_view(), name='employee_leave_details'),
+    path('api/employee/<int:user_id>/', views.EmployeeLeaveDetailView.as_view(), name='employee-detail'),
+
     path('api/employees/leave-details/add-or-update/', views.AddOrUpdateEmployeeLeaveDetailView.as_view(), name='add_update_employee_leave_detail'),
     # --- Attendance & Payroll ---
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),

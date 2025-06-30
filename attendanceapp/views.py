@@ -227,7 +227,7 @@ class EmployeeDashboardView(APIView):
 
 
 class AddOrUpdateEmployeeView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
      
     def post(self, request):
         try:
@@ -285,7 +285,7 @@ class AddOrUpdateEmployeeView(APIView):
             # Update employee fields
             employee.full_name = f"{user.first_name} {user.last_name}"
             employee.department = department
-            
+            employee.workshift =  data.get("workshift",employee.workshift)
             employee.designation = designation
             employee.date_of_birth = data.get("date_of_birth")
             employee.gender = data.get("gender", employee.gender)
@@ -347,9 +347,8 @@ class AddOrUpdateEmployeeView(APIView):
 
 class GetEmployeeDetailView(APIView):
     permission_classes = [IsAuthenticated]
-
+    
     def get(self, request, employee_id):
-        print(employee_id)
         try:
             employee = Employees.objects.select_related('user', 'department', 'designation').get(id=employee_id)
 
@@ -360,7 +359,7 @@ class GetEmployeeDetailView(APIView):
                     "leave_type": leave.employee_leave_type.leave_type,
                     "leave_count": leave.leave_count
                 })
-            print(employee.profile_pic.url)
+            
             data = {
                 "id": employee.id,
                 "username": employee.user.username,
@@ -396,6 +395,7 @@ class GetEmployeeDetailView(APIView):
             return Response({"message": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 ###########need to Work###################
@@ -756,34 +756,84 @@ class EmployeeLeaveDetailsByUserId(APIView):
         except CustomUser.DoesNotExist:
             return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
+class EmployeeLeaveDetailView(APIView):
+    def get(self, request, user_id):
+        try:
+            employee = Employees.objects.select_related(
+                "user", "department", "designation", "organization"
+            ).get(user__id=user_id)
 
+            # build leave details
+            leave_details_qs = EmployeeLeaveDetails.objects.filter(employee_id=employee.user)
+            leave_details = [
+                {"leave_type": l.employee_leave_type.leave_type, "leave_count": l.leave_count}
+                for l in leave_details_qs
+            ]
+
+            data = {
+                "id": employee.id,
+                "username": employee.user.username,
+                "email": employee.user.email,
+                "first_name": employee.user.first_name,
+                "last_name": employee.user.last_name,
+                "finger_print_code": employee.finger_print_code,
+                "department_id": employee.department.id,
+                "department_name": employee.department.department_name,
+                "designation_id": employee.designation.id,
+                "designation_name": employee.designation.designation_name,
+                "date_of_birth": employee.date_of_birth,
+                "gender": employee.gender,
+                "nationality": employee.nationality,
+                "iqama_number": employee.iqama_number,
+                "mob_no": employee.mob_no,
+                "address": employee.address,
+                "joining_date": employee.joining_date,
+                "work_status": employee.work_status,
+                "basic_salary": employee.basic_salary,
+                "gosi_applicable": employee.gosi_applicable,
+                "gosi_deduction_amount": employee.gosi_deduction_amount,
+                "filename": employee.filename,
+                "workshift": employee.workshift,
+                "over_time_salary": employee.over_time_salary,
+                "user_type": employee.user.user_type,
+                "profile_pic": employee.profile_pic.url if employee.profile_pic else None,
+                "leave_details": leave_details
+            }
+
+            return Response({"message": "Success", "data": data}, status=status.HTTP_200_OK)
+        except Employees.DoesNotExist:
+            return Response({"message": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FilterLeaveRequestsAPIView(APIView):
     def post(self, request):
         try:
             data = request.data
 
-            license_key = data.get("license_key")
-            employee_id = data.get("employee_id")      # Optional
-            status_filter = data.get("status")         # Optional: Approved, Pending, Rejected
-            start_date = data.get("start_date")        # Optional
-            end_date = data.get("end_date")            # Optional
+            # license_key = data.get("license_key")
+            employee_id = data.get("employee_id")          # for Employees.id
+            employee_user_id = data.get("employee_user_id")# for CustomUser.id
+            status_filter = data.get("status")
+            start_date = data.get("start_date")
+            end_date = data.get("end_date")
 
-            if not license_key:
-                return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
+            # if not license_key:
+            #     return Response({"message": "license_key is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                license = License.objects.get(key=license_key)
-                organization = license.organization
-            except License.DoesNotExist:
-                return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
+            # try:
+            #     license = License.objects.get(key=license_key)
+            #     organization = license.organization
+            # except License.DoesNotExist:
+            #     return Response({"message": "Invalid license key"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Base QuerySet: all leaves in the organization
-            queryset = LeaveMangement.objects.filter(organization_id=organization)
+            queryset = LeaveMangement.objects.all()
 
-            # Optional filters
             if employee_id:
-                queryset = queryset.filter(employee_id__user__id=employee_id)
+                queryset = queryset.filter(employee_id__id=employee_id)
+
+            if employee_user_id:
+                queryset = queryset.filter(employee_id__user__id=employee_user_id)
 
             if status_filter:
                 queryset = queryset.filter(status=status_filter)
@@ -802,7 +852,6 @@ class FilterLeaveRequestsAPIView(APIView):
                 except ValueError:
                     return Response({"message": "Invalid end_date format (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Format result
             leave_list = []
             for leave in queryset.select_related("employee_id", "leave_type"):
                 leave_list.append({
@@ -820,6 +869,7 @@ class FilterLeaveRequestsAPIView(APIView):
 
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         
 
 
@@ -1169,7 +1219,7 @@ class HRDashboardView(APIView):
                 end_date__gte=today,
                 status="Approved"
             )
-
+            print(on_leave_today)
             on_leave_count = on_leave_today.count()
 
             # 6. Pending leave requests
@@ -1223,7 +1273,7 @@ class HRDashboardView(APIView):
                     "full_name": employee.full_name,
                     "department": employee.department.department_name if employee.department else "",
                     "designation": employee.designation.designation_name if employee.designation else "",
-                    "leave_type": leave.leave_type.leave_type_name if leave.leave_type else "",
+                    "leave_type": leave.leave_type.leave_type if leave.leave_type else "",
                     "leave_status": leave.status,
                     "leave_remarks": leave.remarks,
                     "leave_duration": f"{leave.start_date} to {leave.end_date}"
@@ -1323,30 +1373,30 @@ class RequestLeaveAPIView(APIView):
     def post(self, request):
         try:
             data = request.data
-            print(data)
-            license_key = data.get("license_key")
-            user_id = data.get("employee_id")
-            leave_type_id = data.get("leave_type_id")
-            start_date = data.get("start_date")  # format: YYYY-MM-DD
+
+            user_id = data.get("employee_id")  # optional
+            leave_type_name = data.get("leave_type")  # e.g. "SICK"
+            start_date = data.get("start_date")       # format: YYYY-MM-DD
             end_date = data.get("end_date")
             remarks = data.get("remarks", "")
-           
-            if not all([license_key, user_id, leave_type_id, start_date, end_date]):
+
+            if not all([leave_type_name, start_date, end_date]):
                 return Response({"message": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Validate license and organization
+            # Get employee
             try:
-                license = License.objects.get(key=license_key)
-                organization = license.organization
-            except License.DoesNotExist:
-                return Response({"message": "Invalid license key"}, status=status.HTTP_400_BAD_REQUEST)
+                if user_id:
+                    employee = Employees.objects.get(user__id=user_id)
+                else:
+                    employee = Employees.objects.get(user=request.user)
+            except Employees.DoesNotExist:
+                return Response({"message": "Employee not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            # Get employee and leave type
+            # Get leave type by string name
             try:
-                employee = Employees.objects.get(user__id=user_id, organization_id=organization)
-                leave_type = LEAVETYPE.objects.get(id=leave_type_id)
-            except (Employees.DoesNotExist, LEAVETYPE.DoesNotExist):
-                return Response({"message": "Employee or Leave Type not found"}, status=status.HTTP_404_NOT_FOUND)
+                leave_type = LEAVETYPE.objects.get(leave_type=leave_type_name.upper())
+            except LEAVETYPE.DoesNotExist:
+                return Response({"message": f"Leave type '{leave_type_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Calculate leave days
             start = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1355,9 +1405,12 @@ class RequestLeaveAPIView(APIView):
             if leave_days <= 0:
                 return Response({"message": "End date must be after start date"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get employee's leave balance
+            # Check leave balance
             try:
-                leave_detail = EmployeeLeaveDetails.objects.get(employee_id=employee.user, employee_leave_type=leave_type)
+                leave_detail = EmployeeLeaveDetails.objects.get(
+                    employee_id=employee.user,
+                    employee_leave_type=leave_type
+                )
             except EmployeeLeaveDetails.DoesNotExist:
                 return Response({"message": "Leave type not assigned to this employee"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1368,9 +1421,9 @@ class RequestLeaveAPIView(APIView):
                     "requested": leave_days
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Create leave request (status = Pending)
+            # Create leave request
             LeaveMangement.objects.create(
-                organization_id=organization,
+                organization_id=employee.organization,
                 employee_id=employee,
                 leave_type=leave_type,
                 start_date=start,
@@ -1379,7 +1432,11 @@ class RequestLeaveAPIView(APIView):
                 status="Pending",
                 remarks=remarks
             )
-            return Response({"message": "Leave request submitted successfully"}, status=status.HTTP_201_CREATED)
+
+            return Response({
+                "message": "Leave request submitted successfully",
+                "employee_id": employee.user.id
+            }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1388,12 +1445,13 @@ class RequestLeaveAPIView(APIView):
 
 
 class ApproveOrRejectLeaveAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
     def post(self, request):
         try:
             data = request.data
             leave_id = data.get("leave_id")
             action = data.get("action")  # "approve" or "reject"
-
+            print(data)
             if not leave_id or action not in ["approve", "reject"]:
                 return Response({"message": "Invalid leave ID or action"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1429,8 +1487,8 @@ class ApproveOrRejectLeaveAPIView(APIView):
                 return Response({"message": "Leave rejected"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-
-            return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(e)
+            return Response({"messages": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class AddOrUpdateConfigurationView(APIView):
