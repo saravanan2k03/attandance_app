@@ -20,7 +20,11 @@ from django.views.generic.base import RedirectView
 from django.conf import settings
 
 from django.conf.urls.static import static
- 
+
+
+admin.site.site_header = "HourlyDots"
+admin.site.site_title = "HourlyDots"
+admin.site.index_title = "Welcome to My Dashboard"
 
  
 urlpatterns = [
