@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -24,6 +24,11 @@ urlpatterns = [
     path('api/employees/leave-details/add-or-update/', views.AddOrUpdateEmployeeLeaveDetailView.as_view(), name='add_update_employee_leave_detail'),
     # --- Attendance & Payroll ---
     path('api/attendance/add/', views.AddAttendanceRecordView.as_view(), name='add_attendance'),
+    # path('iclock/cdata/', views.IClockCDataView.as_view(), name='iclock_cdata'),
+    path('iclock/cdata/', views.IClockCDataView.as_view(), name='iclock-cdata'),
+
+    re_path(r'^iclock/cdata$', views.IClockCDataView.as_view()),  # also accept without trailing slash
+
     path('api/attendance/update/<int:pk>/', views.UpdateAttendanceRecordView.as_view(), name='update_attendance_by_id'),
     path('api/payroll/generate/', views.GenerateOrUpdatePayrollView.as_view(), name='generate_payroll'),
     path('api/list-payroll/', views.ListPayrollRecordsView.as_view(), name='list-payroll'),

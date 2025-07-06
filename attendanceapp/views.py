@@ -28,7 +28,7 @@ from django.utils.dateparse import parse_datetime
 from django.template.loader import render_to_string
 from django.core.mail import EmailMessage
 from django.utils.dateparse import parse_date
-
+from django.db import transaction
 from attendanceapp.utils import to_bool
 # Create your views here.
 def members(request):
@@ -516,7 +516,126 @@ class AddAttendanceRecordView(APIView):
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class IClockCDataView(APIView):
+    def post(self, request):
+        print("enter")
+        try:
+            raw_data = request.body.decode('utf-8').strip()
+            if not raw_data:
+                return Response({"message": "Empty payload"}, status=status.HTTP_400_BAD_REQUEST)
 
+            lines = raw_data.splitlines()
+            responses = []
+
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) < 3:
+                    continue
+
+                finger_print_code = parts[0]
+                date_str = parts[1]
+                time_str = parts[2]
+
+                try:
+                    punch_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    punch_time = datetime.strptime(time_str, "%H:%M:%S").time()
+                except ValueError:
+                    responses.append({"line": line, "error": "Invalid date/time format"})
+                    continue
+
+                try:
+                    employee = Employees.objects.get(finger_print_code=finger_print_code)
+                except Employees.DoesNotExist:
+                    responses.append({"line": line, "error": f"Employee with fingerprint {finger_print_code} not found"})
+                    continue
+
+                # Determine organization from employee
+                organization = employee.organization
+
+                # Get config
+                config = Configuration.objects.filter(
+                    organization_id=organization,
+                    workshift=employee.workshift
+                ).first()
+                if not config:
+                    responses.append({"line": line, "error": "Shift configuration not found"})
+                    continue
+
+                with transaction.atomic():
+                    attendance, created = AttendanceRecords.objects.get_or_create(
+                        employee_id=employee,
+                        organization_id=organization,
+                        date=punch_date,
+                        defaults={
+                            "check_in_time": None,
+                            "check_out_time": None,
+                            "present_one": "Absent",
+                            "present_two": "Absent",
+                            "work_hours": 0,
+                            "overtime_hours": 0,
+                            "is_overtime": False,
+                        }
+                    )
+
+                    # Check holiday
+                    is_today_holiday = leaveDaysOfThisYearWise.objects.filter(
+                        organization_id=organization,
+                        leave_date=punch_date,
+                        is_active=True
+                    ).exists()
+                    if is_today_holiday:
+                        attendance.present_one = "Absent"
+                        attendance.present_two = "Absent"
+                        attendance.save()
+                        responses.append({"line": line, "info": "Marked absent due to holiday"})
+                        continue
+
+                    # Determine check-in or check-out
+                    if config.punch_in_start_time <= punch_time <= config.punch_in_end_time:
+                        attendance.check_in_time = punch_time
+                        attendance.present_one = "Present"
+                    elif config.punch_in_start_late_time and config.punch_in_end_late_time:
+                        if config.punch_in_start_late_time <= punch_time <= config.punch_in_end_late_time:
+                            attendance.check_in_time = punch_time
+                            attendance.present_one = "Late"
+                        elif punch_time > config.punch_in_end_late_time:
+                            attendance.present_one = "Absent"
+
+                    elif config.punch_out_start_time and config.punch_out_end_time:
+                        if config.punch_out_start_time <= punch_time <= config.punch_out_end_time:
+                            attendance.check_out_time = punch_time
+                            attendance.present_two = "Present"
+                        elif punch_time < config.punch_out_start_time:
+                            attendance.check_out_time = punch_time
+                            attendance.present_two = "On Early"
+                        elif config.over_time_working_end_time:
+                            if punch_time > config.punch_out_end_time and punch_time <= config.over_time_working_end_time:
+                                attendance.check_out_time = punch_time
+                                attendance.present_two = "Present"
+                                attendance.is_overtime = True
+                                overtime_duration = datetime.combine(date.min, punch_time) - datetime.combine(date.min, config.punch_out_end_time)
+                                attendance.overtime_hours = round(overtime_duration.total_seconds() / 3600, 2)
+                            elif punch_time > config.over_time_working_end_time:
+                                attendance.check_out_time = punch_time
+                                attendance.present_two = "Absent"
+
+                    # Calculate work hours if both times present
+                    if attendance.check_in_time and attendance.check_out_time:
+                        in_time = datetime.combine(punch_date, attendance.check_in_time)
+                        out_time = datetime.combine(punch_date, attendance.check_out_time)
+                        attendance.work_hours = round((out_time - in_time).total_seconds() / 3600, 2)
+
+                    attendance.save()
+                    responses.append({"line": line, "status": "Saved", "employee": employee.full_name})
+
+            return Response({"results": responses}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        # print("get enter")
+        return Response({"message": "GET OK - attendance punch endpoint is working"}, status=status.HTTP_200_OK)
 
 class UpdateAttendanceRecordView(APIView):
     def patch(self, request, pk):  # Use path param for attendance_id
