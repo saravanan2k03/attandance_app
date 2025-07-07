@@ -10,8 +10,8 @@ env/
 .env/
 
 # Media and static files
-media/
-static/
+# media/
+# static/
 
 # Django specific
 *.log

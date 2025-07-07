@@ -1,0 +1,6 @@
+/* admin_custom.css */
+#header .branding img.my-admin-logo {
+    height: 50px;
+    width: auto;
+    margin: 5px 0;
+}
