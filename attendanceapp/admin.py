@@ -1,10 +1,47 @@
 from django.contrib import admin
 from attendanceapp.models import *
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+
+class CustomUserAdmin(BaseUserAdmin):
+    add_form = UserCreationForm
+    form = UserChangeForm
+    model = CustomUser
+
+    list_display = ("username", "email", "first_name", "last_name", "user_type", "is_staff", "is_active")
+    list_filter = ("is_staff", "is_active", "groups")
+
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Personal info", {"fields": ("first_name", "last_name", "email", "user_type")}),
+        ("Permissions", {
+            "fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")
+        }),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
+    )
+
+    add_fieldsets = (
+        (None, {
+            "classes": ("wide",),
+            "fields": (
+                "username",
+                "first_name",
+                "last_name",
+                "email",
+                "user_type",
+                "password1",
+                "password2",
+                "is_staff",
+                "is_active",
+            ),
+        }),
+    )
+
+    search_fields = ("username", "email", "first_name", "last_name")
+    ordering = ("username",)
 
 
-class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ("id","username", "first_name", "last_name", "email", "user_type")
-    search_fields = ("username", "email")
+
 
 
 class OrganizationAdmin(admin.ModelAdmin):

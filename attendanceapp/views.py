@@ -98,7 +98,7 @@ class ForgotPasswordView(APIView):
                     subject='Password Reset Request',
                     body=html_content,
                     from_email="saravanan2kk0@gmail.com",
-                    to=['midhunrajagopal112@gmail.com'],
+                    to=[email],
                     # cc=[cc_email]
                 )
 
