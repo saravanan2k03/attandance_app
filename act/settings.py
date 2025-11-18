@@ -49,7 +49,15 @@ CORS_ALLOW_METHODS = [
     'POST',
     'PUT',
 ]
-ALLOWED_HOSTS = ['*']
+# ... inside settings.py
+
+ALLOWED_HOSTS = ['*'] # Or use your specific domain list
+
+# ADD THIS SECTION:
+CSRF_TRUSTED_ORIGINS = [
+    'https://hourlydot.com',
+    'https://www.hourlydot.com',
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
