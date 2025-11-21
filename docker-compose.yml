@@ -19,6 +19,7 @@ services:
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
+      - media_volume:/app/media  # <--- ADDED: Syncs Django uploads to the shared volume
     expose:
       - 8000
     env_file:
@@ -37,6 +38,7 @@ services:
       - "443:443"
     volumes:
       - static_volume:/app/staticfiles
+      - media_volume:/app/media  # <--- ADDED: Allows Nginx to read the shared uploads
       - ./nginx:/etc/nginx/conf.d
       - certbot_conf:/etc/letsencrypt
       - certbot_www:/var/www/certbot
@@ -58,6 +60,7 @@ volumes:
   static_volume:
   certbot_conf:
   certbot_www:
+  media_volume:  # <--- ADDED: Define the new volume here
 
 networks:
   main_net:
