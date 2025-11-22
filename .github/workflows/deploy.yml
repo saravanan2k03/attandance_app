@@ -1,59 +1,71 @@
-name: Deploy to Hostinger
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DBNAME}
+      MYSQL_USER: ${DBUSER}
+      MYSQL_PASSWORD: ${DBPASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - main_net
 
-on:
-  push:
-    branches: [ "main" ]
+  web:
+    build: .
+    command: gunicorn act.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    expose:
+      - 8000
+    env_file:
+      - .env
+    depends_on:
+      - db
+    networks:
+      - main_net
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./nginx:/etc/nginx/conf.d
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+      
+      # ✅ FIXED: Now points to /opt/ instead of /root/
+      - /opt/attandance_desktop/build/web:/var/www/flutter_app
+      
+    depends_on:
+      - web
+    networks:
+      - main_net
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_IP }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            # 1. Setup Directory
-            mkdir -p /root/myproject
-            cd /root/myproject
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    networks:
+      - main_net
 
-            # 2. Pull latest code
-            if [ -d ".git" ]; then
-              git pull origin main
-            else
-              git clone https://github.com/${{ github.repository }} .
-            fi
+volumes:
+  db_data:
+  static_volume:
+  media_volume:
+  certbot_conf:
+  certbot_www:
 
-            # 3. Create .env file (Mapping your Secrets to the file)
-            # We create BOTH versions of the variables to ensure compatibility
-            # with both your Django settings.py and the Docker config.
-
-            echo "DEBUG=${{ secrets.DEBUG }}" > .env
-            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
-            echo "ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}" >> .env
-            
-            # Database - Mapping 'DBNAME' (your secret) to 'DB_NAME' (for Docker) AND 'DBNAME' (for Django)
-            echo "DB_NAME=${{ secrets.DBNAME }}" >> .env
-            echo "DBNAME=${{ secrets.DBNAME }}" >> .env
-            
-            echo "DB_USER=${{ secrets.DBUSER }}" >> .env
-            echo "DBUSER=${{ secrets.DBUSER }}" >> .env
-            
-            echo "DB_PASSWORD=${{ secrets.DBPASSWORD }}" >> .env
-            echo "DBPASSWORD=${{ secrets.DBPASSWORD }}" >> .env
-            
-            echo "DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" >> .env
-            echo "DB_HOST=db" >> .env
-
-            # Email Settings
-            echo "EMAIL_HOST_USER=${{ secrets.EMAIL_HOST_USER }}" >> .env
-            echo "EMAIL_HOST_PASSWORD=${{ secrets.EMAIL_HOST_PASSWORD }}" >> .env
-
-            # 4. Build and Deploy
-            docker compose down
-            docker compose up -d --build
+networks:
+  main_net:
+    driver: bridge
